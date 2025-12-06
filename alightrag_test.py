@@ -2,10 +2,10 @@ import os
 import asyncio
 import logging
 import logging.config
-from lightrag import LightRAG, QueryParam
-from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
-from lightrag.kg.shared_storage import initialize_pipeline_status
-from lightrag.utils import logger, set_verbose_debug
+from alightrag import AlightRAG, QueryParam
+from alightrag.llm.openai import gpt_4o_mini_complete, openai_embed
+from alightrag.kg.shared_storage import initialize_pipeline_status
+from alightrag.utils import logger, set_verbose_debug
 # set OPENAI_API_KEY=sk-20d2e7fc7ec3429da0591e184e458341
 # $env:OPENAI_API_KEY="sk-20d2e7fc7ec3429da0591e184e458341"
 WORKING_DIR = "./dickens"
@@ -15,7 +15,7 @@ def configure_logging():
     """Configure logging for the application"""
 
     # Reset any existing handlers to ensure clean configuration
-    for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "lightrag"]:
+    for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "alightrag"]:
         logger_instance = logging.getLogger(logger_name)
         logger_instance.handlers = []
         logger_instance.filters = []
@@ -59,7 +59,7 @@ def configure_logging():
                 },
             },
             "loggers": {
-                "lightrag": {
+                "alightrag": {
                     "handlers": ["console", "file"],
                     "level": "INFO",
                     "propagate": False,
@@ -79,7 +79,7 @@ if not os.path.exists(WORKING_DIR):
 
 
 async def initialize_rag():
-    rag = LightRAG(
+    rag = AlightRAG(
         working_dir=WORKING_DIR,
         embedding_func=openai_embed,
         llm_model_func=gpt_4o_mini_complete,
