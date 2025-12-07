@@ -421,11 +421,6 @@ Output:
 ]
 
 # alightrag-insert TODO
-PROMPTS["alightrag_retrieval"] = """
----Entities & Relationships---
-{context_data}
-"""
-
 PROMPTS["alightrag_reasoning"] = """
 You are an expert in knowledge graph reasoning. Your task is to analyze a given question and construct one or more relation paths that can logically answer it. Each path must be a chain in the format: entity -> relationship -> entity -> ... -> entity, where the final entity in the path represents the potential answer to the question. 
 
@@ -454,9 +449,9 @@ Output your response in the following strict JSON format, with no additional tex
 ### Few-Shot Examples:
 
 Example 1:
-Question: Who is the director of Inception?
 Entities: Inception, Christopher Nolan, Film
 Relationships: (Inception, directed by, Christopher Nolan); (Inception, is a, Film)
+Question: Who is the director of Inception?
 Output:
 {
   "paths": [
@@ -466,9 +461,9 @@ Output:
 }
 
 Example 2:
-Question: What is the capital of the country where the Eiffel Tower is located?
 Entities: Eiffel Tower, Paris, France
 Relationships: (Eiffel Tower, located in, Paris); (Paris, is capital of, France)
+Question: What is the capital of the country where the Eiffel Tower is located?
 Output:
 {
   "paths": [
@@ -479,9 +474,9 @@ Output:
 }
 
 Example 3:
-Question: Who won the Nobel Prize in Physics in 2020?
 Entities: Roger Penrose, Reinhard Genzel, Andrea Ghez, Nobel Prize in Physics, 2020
 Relationships: (Nobel Prize in Physics, awarded in, 2020); (Nobel Prize in Physics, won by, Roger Penrose); (Nobel Prize in Physics, won by, Reinhard Genzel); (Nobel Prize in Physics, won by, Andrea Ghez)
+Question: Who won the Nobel Prize in Physics in 2020?
 Output:
 {
   "paths": [
@@ -491,11 +486,13 @@ Output:
   ],
   "explanation": "Multiple paths connect the 2020 Nobel Prize in Physics to its co-winners via the 'won by' relationship."
 }
+"""
 
+PROMPTS["alightrag_reasoning_query"] = """
 Now, construct the paths for the following:
-Question: {question}
 Entities: {entities}
 Relationships: {relationships}
+Question: {question}
 """
 
 PROMPTS["alightrag_reflection"] = """
@@ -531,11 +528,11 @@ Output your response in the following strict JSON format, with no additional tex
 ### Few-Shot Examples:
 
 Example 1:
-Question: Who is the director of Inception?
 Entities: Inception, Christopher Nolan, Film
 Relationships: (Inception, directed by, Christopher Nolan); (Inception, is a, Film)
 Proposed Paths: 
 ["Inception -> directed by -> Christopher Nolan"]
+Question: Who is the director of Inception?
 Output:
 {
   "validated_paths": [
@@ -551,11 +548,11 @@ Output:
 }
 
 Example 2:
-Question: What is the capital of the country where the Eiffel Tower is located?
 Entities: Eiffel Tower, Paris, France
 Relationships: (Eiffel Tower, located in, Paris); (Paris, is capital of, France)
 Proposed Paths: 
 ["Eiffel Tower -> located in -> Paris", "Eiffel Tower -> located in -> Paris -> is capital of -> France"]
+Question: What is the capital of the country where the Eiffel Tower is located?
 Output:
 {
   "validated_paths": [
@@ -576,11 +573,11 @@ Output:
 }
 
 Example 3:
-Question: Who won the Nobel Prize in Physics in 2020?
 Entities: Roger Penrose, Reinhard Genzel, Andrea Ghez, Nobel Prize in Physics, 2020
 Relationships: (Nobel Prize in Physics, awarded in, 2020); (Nobel Prize in Physics, won by, Roger Penrose); (Nobel Prize in Physics, won by, Reinhard Genzel); (Nobel Prize in Physics, won by, Andrea Ghez)
 Proposed Paths: 
 ["Nobel Prize in Physics -> awarded in -> 2020 -> won by -> Roger Penrose", "Nobel Prize in Physics -> awarded in -> 2020 -> won by -> Reinhard Genzel", "Nobel Prize in Physics -> awarded in -> 2020 -> won by -> Andrea Ghez"]
+Question: Who won the Nobel Prize in Physics in 2020?
 Output:
 {
   "validated_paths": [
@@ -608,12 +605,14 @@ Output:
     "Are there relationships connecting the 2020 award year directly to the winners?"
   ]
 }
+"""
 
+PROMPTS["alightrag_reflection_query"] = """
 Now, validate the following:
-Question: {question}
 Entities: {entities}
 Relationships: {relationships}
 Proposed Paths: {paths}
+Question: {question}
 """
 
 PROMPTS["alightrag_response"] = """
@@ -648,10 +647,10 @@ Do not add any other sections or text outside this format.
 ### Few-Shot Examples:
 
 Example 1:
-Question: Who is the director of Inception?
 Entities: Inception, Christopher Nolan, Film
 Relationships: (Inception, directed by, Christopher Nolan); (Inception, is a, Film)
 Validated Paths: ["Inception -> directed by -> Christopher Nolan"]
+Question: Who is the director of Inception?
 Output:
 # Answer
 Christopher Nolan.
@@ -664,10 +663,10 @@ Christopher Nolan.
 - Inception is classified as a Film in the knowledge graph.
 
 Example 2:
-Question: What is the capital of the country where the Eiffel Tower is located?
 Entities: Eiffel Tower, Paris, France
 Relationships: (Eiffel Tower, located in, Paris); (Paris, is capital of, France)
 Validated Paths: ["Eiffel Tower -> located in -> Paris", "Eiffel Tower -> located in -> Paris -> is capital of -> France"]
+Question: What is the capital of the country where the Eiffel Tower is located?
 Output:
 # Answer
 Paris.
@@ -682,10 +681,10 @@ Paris.
 - Paris is connected as the capital of France.
 
 Example 3:
-Question: Who won the Nobel Prize in Physics in 2020?
 Entities: Roger Penrose, Reinhard Genzel, Andrea Ghez, Nobel Prize in Physics, 2020
 Relationships: (Nobel Prize in Physics, awarded in, 2020); (Nobel Prize in Physics, won by, Roger Penrose); (Nobel Prize in Physics, won by, Reinhard Genzel); (Nobel Prize in Physics, won by, Andrea Ghez)
 Validated Paths: ["Nobel Prize in Physics -> won by -> Roger Penrose", "Nobel Prize in Physics -> won by -> Reinhard Genzel", "Nobel Prize in Physics -> won by -> Andrea Ghez"]
+Question: Who won the Nobel Prize in Physics in 2020?
 Output:
 # Answer
 Roger Penrose, Reinhard Genzel, and Andrea Ghez (co-winners).
@@ -700,43 +699,37 @@ Roger Penrose, Reinhard Genzel, and Andrea Ghez (co-winners).
 
 ## Supporting Details
 - The Nobel Prize in Physics was awarded in 2020, as per the relationships.
-
-Now, construct the final response for the following:
-Question: {question}
-Entities: {entities}
-Relationships: {relationships}
-Validated Paths: {paths}
 """
 
-PROMPTS["alightrag_kg_query_context"] = """
-Knowledge Graph Data (Entity):
 
+PROMPTS["alightrag_response_query"] = """
+Now, construct the response for the following:
+Entities:
 ```json
 {entities_str}
 ```
-
-Knowledge Graph Data (Relationship):
-
+Relationships:
 ```json
 {relations_str}
 ```
-
-Knowledge Graph Data (Reasoning Path):
-
+Validated Paths:
 ```json
 {paths_str}
 ```
-
 Document Chunks (Each entry has a reference_id refer to the `Reference Document List`):
-
 ```json
 {text_chunks_str}
 ```
-
 Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Document Chunks):
-
 ```
 {reference_list_str}
 ```
-
+Question:
+ {question}
 """
+
+# Now, construct the response for the following:
+# Entities: {entities}
+# Relationships: {relationships}
+# Validated Paths: {paths}
+# Question: {question}

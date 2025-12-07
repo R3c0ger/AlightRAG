@@ -3,12 +3,11 @@ import asyncio
 import logging
 import logging.config
 from alightrag import AlightRAG, QueryParam
-from alightrag.llm.openai import gpt_4o_mini_complete, openai_embed
+# from alightrag.llm.openai import gpt_4o_mini_complete, openai_embed
+from alightrag.llm.azure_openai import azure_openai_complete, azure_openai_embed
 from alightrag.kg.shared_storage import initialize_pipeline_status
 from alightrag.utils import logger, set_verbose_debug
-# set OPENAI_API_KEY=sk-20d2e7fc7ec3429da0591e184e458341
-# $env:OPENAI_API_KEY="sk-20d2e7fc7ec3429da0591e184e458341"
-WORKING_DIR = "./dickens"
+WORKING_DIR = "./alightrag_test"
 
 
 def configure_logging():
@@ -22,9 +21,9 @@ def configure_logging():
 
     # Get log directory path from environment variable or use current directory
     log_dir = os.getenv("LOG_DIR", os.getcwd())
-    log_file_path = os.path.abspath(os.path.join(log_dir, "lightrag_demo.log"))
+    log_file_path = os.path.abspath(os.path.join(log_dir, "alightrag_demo.log"))
 
-    print(f"\nLightRAG demo log file: {log_file_path}\n")
+    print(f"\nAlightRAG demo log file: {log_file_path}\n")
     os.makedirs(os.path.dirname(log_dir), exist_ok=True)
 
     # Get log file max size and backup count from environment variables
@@ -81,8 +80,8 @@ if not os.path.exists(WORKING_DIR):
 async def initialize_rag():
     rag = AlightRAG(
         working_dir=WORKING_DIR,
-        embedding_func=openai_embed,
-        llm_model_func=gpt_4o_mini_complete,
+        embedding_func=azure_openai_embed,
+        llm_model_func=azure_openai_complete,
     )
 
     await rag.initialize_storages()
@@ -93,13 +92,13 @@ async def initialize_rag():
 
 async def main():
     # Check if OPENAI_API_KEY environment variable exists
-    if not os.getenv("OPENAI_API_KEY"):
-        print(
-            "Error: OPENAI_API_KEY environment variable is not set. Please set this variable before running the program."
-        )
-        print("You can set the environment variable by running:")
-        print("  export OPENAI_API_KEY='your-openai-api-key'")
-        return  # Exit the async function
+    # if not os.getenv("OPENAI_API_KEY"):
+    #     print(
+    #         "Error: OPENAI_API_KEY environment variable is not set. Please set this variable before running the program."
+    #     )
+    #     print("You can set the environment variable by running:")
+    #     print("  export OPENAI_API_KEY='your-openai-api-key'")
+    #     return  # Exit the async function
 
     try:
         # Clear old data files
@@ -135,58 +134,58 @@ async def main():
         with open("./book.txt", "r", encoding="utf-8") as f:
             await rag.ainsert(f.read())
 
-        # Perform naive search
-        print("\n=====================")
-        print("Query mode: naive")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="naive")
-            )
-        )
+        query="What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?"
 
-        # Perform local search
-        print("\n=====================")
-        print("Query mode: local")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="local")
-            )
-        )
+        # # Perform naive search
+        # print("\n=====================")
+        # print("Query mode: naive")
+        # print("=====================")
+        # print(
+        #     await rag.aquery(
+        #         query, param=QueryParam(mode="naive")
+        #     )
+        # )
+        #
+        # # Perform local search
+        # print("\n=====================")
+        # print("Query mode: local")
+        # print("=====================")
+        # print(
+        #     await rag.aquery(
+        #         query, param=QueryParam(mode="local")
+        #     )
+        # )
+        #
+        # # Perform global search
+        # print("\n=====================")
+        # print("Query mode: global")
+        # print("=====================")
+        # print(
+        #     await rag.aquery(
+        #         query,
+        #         param=QueryParam(mode="global"),
+        #     )
+        # )
+        #
+        # # Perform hybrid search
+        # print("\n=====================")
+        # print("Query mode: hybrid")
+        # print("=====================")
+        # print(
+        #     await rag.aquery(
+        #         "What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?",
+        #         param=QueryParam(mode="hybrid"),
+        #     )
+        # )
 
-        # Perform global search
-        print("\n=====================")
-        print("Query mode: global")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?",
-                param=QueryParam(mode="global"),
-            )
-        )
-
-        # Perform hybrid search
-        print("\n=====================")
-        print("Query mode: hybrid")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?",
-                param=QueryParam(mode="hybrid"),
-                # TODO
-                system_prompt=""
-            )
-        )
-
-        # alightrag-insert
+        # alightrag-insert TODO
         # Perform alightrag search
         print("\n=====================")
         print("Query mode: alightrag")
         print("=====================")
         print(
             await rag.aquery(
-                "What are the top themes in this story?",
+                query,
                 param=QueryParam(mode="alightrag"),
             )
         )

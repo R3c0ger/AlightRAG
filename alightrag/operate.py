@@ -32,6 +32,7 @@ from alightrag.utils import (
     create_prefixed_exception,
     fix_tuple_delimiter_corruption,
     convert_to_user_format,
+    alightrag_convert_to_user_format,
     generate_reference_list_from_chunks,
     apply_source_ids_limit,
     merge_source_ids,
@@ -3038,8 +3039,8 @@ async def kg_query(
         query, query_param, global_config, hashing_kv
     )
 
-    logger.debug(f"High-level keywords: {hl_keywords}")
-    logger.debug(f"Low-level  keywords: {ll_keywords}")
+    logger.info(f"High-level keywords: {hl_keywords}")
+    logger.info(f"Low-level  keywords: {ll_keywords}")
 
     # Handle empty keywords
     if ll_keywords == [] and query_param.mode in ["local", "hybrid", "mix"]:
@@ -3103,18 +3104,20 @@ async def kg_query(
 
     # Build system prompt
     # alightrag-insert TODO
-    # sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
-    if system_prompt:
-        sys_prompt_temp=system_prompt
-    elif query_param.mode == "alightrag":
+    if query_param.mode == "alightrag":
         sys_prompt_temp = PROMPTS["alightrag_response"]
+        sys_prompt = sys_prompt_temp.format(
+            response_type=response_type,
+            # user_prompt=user_prompt,
+            # context_data=context_result.context,
+        )
     else:
-        sys_prompt_temp=PROMPTS["rag_response"]
-    sys_prompt = sys_prompt_temp.format(
-        response_type=response_type,
-        user_prompt=user_prompt,
-        context_data=context_result.context,
-    )
+        sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
+        sys_prompt = sys_prompt_temp.format(
+            response_type=response_type,
+            user_prompt=user_prompt,
+            context_data=context_result.context,
+        )
 
     user_query = query
 
@@ -3125,7 +3128,7 @@ async def kg_query(
     # Call LLM
     tokenizer: Tokenizer = global_config["tokenizer"]
     len_of_prompts = len(tokenizer.encode(query + sys_prompt))
-    logger.debug(
+    logger.info(
         f"[kg_query] Sending to LLM: {len_of_prompts:,} tokens (Query: {len(tokenizer.encode(query))}, System: {len(tokenizer.encode(sys_prompt))})"
     )
 
@@ -3158,18 +3161,28 @@ async def kg_query(
     else:
         # response call
         # alightrag-insert TODO
-        logger.debug(
+        logger.info(
             f"[kg_query] response started"
         )
-        response = await use_model_func(
-            user_query,
-            system_prompt=sys_prompt,
-            history_messages=query_param.conversation_history,
-            enable_cot=True,
-            stream=query_param.stream,
-        )
-        logger.debug(f"response: {response}")
-        logger.debug(
+        if query_param.mode == "alightrag":
+            response_query=context_result.context
+            response = await use_model_func(
+                response_query,
+                system_prompt=sys_prompt,
+                history_messages=query_param.conversation_history,
+                enable_cot=True,
+                stream=query_param.stream,
+            )
+        else:
+            response = await use_model_func(
+                user_query,
+                system_prompt=sys_prompt,
+                history_messages=query_param.conversation_history,
+                enable_cot=True,
+                stream=query_param.stream,
+            )
+        logger.info(f"response: {response}")
+        logger.info(
             f"[kg_query] response completed"
         )
 
@@ -3301,7 +3314,7 @@ async def extract_keywords_only(
 
     tokenizer: Tokenizer = global_config["tokenizer"]
     len_of_prompts = len(tokenizer.encode(kw_prompt))
-    logger.debug(
+    logger.info(
         f"[extract_keywords] Sending to LLM: {len_of_prompts:,} tokens (Prompt: {len_of_prompts})"
     )
 
@@ -3463,7 +3476,7 @@ async def _perform_kg_search(
                 query_embedding = query_embedding[
                     0
                 ]  # Extract first embedding from batch result
-                logger.debug("Pre-computed query embedding for all vector operations")
+                logger.info("Pre-computed query embedding for all vector operations")
             except Exception as e:
                 logger.warning(f"Failed to pre-compute query embedding: {e}")
                 query_embedding = None
@@ -3677,7 +3690,7 @@ async def _apply_token_truncation(
             }
         )
 
-    logger.debug(
+    logger.info(
         f"Before truncation: {len(entities_context)} entities, {len(relations_context)} relations"
     )
 
@@ -3944,7 +3957,7 @@ async def _build_context_str(
         sys_prompt_tokens + kg_context_tokens + query_tokens + buffer_tokens
     )
 
-    logger.debug(
+    logger.info(
         f"Token allocation - Total: {max_total_tokens}, SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, KG: {kg_context_tokens}, Buffer: {buffer_tokens}, Available for chunks: {available_chunk_tokens}"
     )
 
@@ -4053,7 +4066,7 @@ async def _build_context_str(
     """
 
     # Always return both context and complete data structure (unified approach)
-    logger.debug(
+    logger.info(
         f"[_build_context_str] Converting to user format: {len(entities_context)} entities, {len(relations_context)} relations, {len(truncated_chunks)} chunks"
     )
     final_data = convert_to_user_format(
@@ -4078,7 +4091,7 @@ async def _build_context_str(
         "metadata": metadata,
     }
     '''
-    logger.debug(
+    logger.info(
         f"[_build_context_str] Final data after conversion: {len(final_data.get('entities', []))} entities, {len(final_data.get('relationships', []))} relationships, {len(final_data.get('chunks', []))} chunks"
     )
     return result, final_data # prompt-templated context, detailed/formatted data
@@ -4128,7 +4141,7 @@ async def _alightrag_build_context_str(
         "system_prompt_template", PROMPTS["rag_response"]
     )
 
-    kg_context_template = PROMPTS["alightrag_kg_query_context"]
+    kg_context_template = PROMPTS["alightrag_response_query"]
     user_prompt = query_param.user_prompt if query_param.user_prompt else ""
     response_type = (
         query_param.response_type
@@ -4155,6 +4168,7 @@ async def _alightrag_build_context_str(
         paths_str=paths_str,  # NEW: Include paths
         text_chunks_str="",
         reference_list_str="",
+        question=query,
     )
     kg_context_tokens = len(tokenizer.encode(pre_kg_context))
 
@@ -4173,7 +4187,7 @@ async def _alightrag_build_context_str(
             sys_prompt_tokens + kg_context_tokens + query_tokens + buffer_tokens
     )
 
-    logger.debug(
+    logger.info(
         f"Token allocation - Total: {max_total_tokens}, SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, KG: {kg_context_tokens}, Buffer: {buffer_tokens}, Available for chunks: {available_chunk_tokens}"
     )
 
@@ -4252,42 +4266,36 @@ async def _alightrag_build_context_str(
         paths_str=paths_str,  # NEW: Include paths in context
         text_chunks_str=text_units_str,
         reference_list_str=reference_list_str,
+        question=query,
     )
     """
-    Knowledge Graph Data (Entity):
-
+    Now, construct the response for the following:
+    Entities:
     ```json
     {entities_str}
     ```
-
-    Knowledge Graph Data (Relationship):
-
+    Relationships:
     ```json
     {relations_str}
     ```
-
-    Knowledge Graph Data (Reasoning Path):
-
+    Validated Paths:
     ```json
     {paths_str}
     ```
-
     Document Chunks (Each entry has a reference_id refer to the `Reference Document List`):
-
     ```json
     {text_chunks_str}
     ```
-
     Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Document Chunks):
-
     ```
     {reference_list_str}
     ```
-
+    Question:
+     {question}
     """
 
     # Always return both context and complete data structure (unified approach)
-    logger.debug(
+    logger.info(
         f"[_build_context_str] Converting to user format: {len(entities_context)} entities, {len(relations_context)} relations, {len(paths_context)} paths, {len(truncated_chunks)} chunks"
     )
     final_data = alightrag_convert_to_user_format(
@@ -4301,7 +4309,7 @@ async def _alightrag_build_context_str(
         paths_context,  # NEW: Pass paths to conversion
     )
 
-    logger.debug(
+    logger.info(
         f"[_build_context_str] Final data after conversion: {len(final_data.get('entities', []))} entities, {len(final_data.get('relationships', []))} relationships, {len(final_data.get('paths', []))} paths, {len(final_data.get('chunks', []))} chunks"
     )
     return result, final_data # prompt-templated context, detailed/formatted data
@@ -4429,10 +4437,10 @@ async def _build_query_context(
         "final_chunks_count": len(raw_data.get("data", {}).get("chunks", [])),
     }
 
-    logger.debug(
+    logger.info(
         f"[_build_query_context] Context length: {len(context) if context else 0}"
     )
-    logger.debug(
+    logger.info(
         f"[_build_query_context] Raw data entities: {len(raw_data.get('data', {}).get('entities', []))}, relationships: {len(raw_data.get('data', {}).get('relationships', []))}, chunks: {len(raw_data.get('data', {}).get('chunks', []))}"
     )
 
@@ -4601,10 +4609,10 @@ async def _alightrag_build_query_context(
     retrieval_query = query
     while current_iteration < max_iterations:
         current_iteration += 1
-        logger.debug(f"[AlightRAG] Starting iteration {current_iteration}/{max_iterations}")
+        logger.info(f"[AlightRAG] Starting iteration {current_iteration}/{max_iterations}")
 
         # Phase 1: Retrieval
-        logger.debug("[AlightRAG] Retrieval started")
+        logger.info("[AlightRAG] Retrieval started")
         search_result = await _perform_kg_search(
             retrieval_query,
             ll_keywords,
@@ -4617,7 +4625,7 @@ async def _alightrag_build_query_context(
             chunks_vdb,
         )
 
-        logger.debug(f"[AlightRAG] Retrieval completed: {len(search_result['final_entities'])} entities, "
+        logger.info(f"[AlightRAG] Retrieval completed: {len(search_result['final_entities'])} entities, "
                      f"{len(search_result['final_relations'])} relations")
 
         # Store original data before filtering
@@ -4633,25 +4641,29 @@ async def _alightrag_build_query_context(
         )
 
         # Log the formatted strings for debugging
-        logger.debug(f"[AlightRAG] Formatted entities: {entities_str[:100]}...")
-        logger.debug(f"[AlightRAG] Formatted relations: {relations_str[:100]}...")
+        logger.info(f"[AlightRAG] Formatted entities: {entities_str[:100]}...")
+        logger.info(f"[AlightRAG] Formatted relations: {relations_str[:100]}...")
 
         # Phase 2: Reasoning
-        logger.debug("[AlightRAG] Reasoning started")
+        logger.info("[AlightRAG] Reasoning started")
         try:
-            reasoning_prompt = PROMPTS["alightrag_reasoning"].format(
-                question=user_query,
+            reasoning_prompt = PROMPTS["alightrag_reasoning"]
+
+            reasoning_query = PROMPTS["alightrag_reasoning_query"].format(
                 entities=entities_str,
-                relationships=relations_str
+                relationships=relations_str,
+                question=user_query,
             )
 
             reasoning_response = await use_model_func(
-                user_query,
+                reasoning_query,
                 system_prompt=reasoning_prompt,
                 history_messages=query_param.conversation_history,
                 enable_cot=True,
                 stream=query_param.stream,
             )
+
+            logger.info(f"[AlightRAG] reasoning_response ->: {reasoning_response}")
 
             # Parse JSON response
             if isinstance(reasoning_response, str):
@@ -4659,29 +4671,33 @@ async def _alightrag_build_query_context(
             else:
                 path_result = reasoning_response
 
-            logger.debug(f"[AlightRAG] Reasoning completed: {len(path_result.get('paths', []))} paths found")
+            logger.info(f"[AlightRAG] Reasoning completed: {len(path_result.get('paths', []))} paths found")
 
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"[AlightRAG] Reasoning failed: {e}")
             path_result = {"paths": [], "explanation": "Reasoning failed"}
 
         # Phase 3: Reflection
-        logger.debug("[AlightRAG] Reflection started")
+        logger.info("[AlightRAG] Reflection started")
         try:
-            reflection_prompt = PROMPTS["alightrag_reflection"].format(
-                question=user_query,
+            reflection_prompt = PROMPTS["alightrag_reflection"]
+
+            reflection_query = PROMPTS["alightrag_reflection"].format(
                 entities=entities_str,
                 relationships=relations_str,
-                paths=json.dumps(path_result.get("paths", []))
+                paths=json.dumps(path_result.get("paths", [])),
+                question=user_query,
             )
 
             reflection_response = await use_model_func(
-                user_query,
+                reflection_query,
                 system_prompt=reflection_prompt,
                 history_messages=query_param.conversation_history,
                 enable_cot=True,
                 stream=query_param.stream,
             )
+
+            logger.info(f"[AlightRAG] reflection_response ->: {reflection_response}")
 
             # Parse JSON response
             if isinstance(reflection_response, str):
@@ -4689,13 +4705,13 @@ async def _alightrag_build_query_context(
             else:
                 validation_result = reflection_response
 
-            logger.debug(f"[AlightRAG] Reflection completed: "
-                         f"{sum(1 for p in validation_result.get('validations', []) if p.get('is_valid'))} valid paths")
+            logger.info(f"[AlightRAG] Reflection completed: "
+                         f"{sum(1 for p in validation_result.get('validated_paths', []) if p.get('is_valid'))} valid paths")
 
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"[AlightRAG] Reflection failed: {e}")
             validation_result = {
-                "validations": [],
+                "validated_paths": [],
                 "filtered_entities": "",
                 "filtered_relationships": "",
                 "overall_explanation": "Reflection failed"
@@ -4727,14 +4743,14 @@ async def _alightrag_build_query_context(
         is_sufficient = not supplementary_questions
 
         if is_sufficient:
-            logger.debug("[AlightRAG] Paths are sufficient, stopping iteration")
+            logger.info("[AlightRAG] Paths are sufficient, stopping iteration")
             break
         elif supplementary_questions and current_iteration < max_iterations:
             # Use first supplementary question for next iteration
             retrieval_query = supplementary_questions[0]
-            logger.debug(f"[AlightRAG] Continuing with supplementary question: {retrieval_query}")
+            logger.info(f"[AlightRAG] Continuing with supplementary question: {retrieval_query}")
         else:
-            logger.debug("[AlightRAG] Maximum iterations reached or no supplementary questions")
+            logger.info("[AlightRAG] Maximum iterations reached or no supplementary questions")
             break
 
     # After iteration completes (or breaks early), proceed with remaining stages
@@ -4820,13 +4836,13 @@ async def _alightrag_build_query_context(
         "final_chunks_count": len(raw_data.get("data", {}).get("chunks", [])),
     }
 
-    logger.debug(
+    logger.info(
         f"[AlightRAG] Final context length: {len(context) if context else 0}, "
     )
-    logger.debug(
+    logger.info(
         f"[AlightRAG] Raw data entities: {len(raw_data.get('data', {}).get('entities', []))}, relationships: {len(raw_data.get('data', {}).get('relationships', []))}, paths: {len(raw_data.get('data', {}).get('paths', []))}, chunks: {len(raw_data.get('data', {}).get('chunks', []))}"
     )
-    logger.debug(
+    logger.info(
         f"[AlightRAG] Final iteration times: {current_iteration}"
     )
 
@@ -5212,7 +5228,7 @@ async def _find_related_text_unit_from_relations(
     1. WEIGHT: Linear gradient weighted polling based on chunk occurrence count
     2. VECTOR: Vector similarity-based selection using embedding cosine similarity
     """
-    logger.debug(f"Finding text chunks from {len(edge_datas)} relations")
+    logger.info(f"Finding text chunks from {len(edge_datas)} relations")
 
     if not edge_datas:
         return []
