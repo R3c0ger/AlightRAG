@@ -5,7 +5,7 @@ from pathlib import Path
 import asyncio
 import json
 import json_repair
-from typing import Any, AsyncIterator, overload, Literal
+from typing import Any, AsyncIterator, overload, Literal, Callable
 from collections import Counter, defaultdict
 
 from alightrag.exceptions import PipelineCancelledException
@@ -3034,11 +3034,6 @@ async def kg_query(
         # Apply higher priority (5) to query relation LLM function
         use_model_func = partial(use_model_func, _priority=5)
 
-    # alightrag-insert
-    logger.debug(
-        f"[kg_query] retrieval started"
-    )
-
     hl_keywords, ll_keywords = await get_keywords_from_query(
         query, query_param, global_config, hashing_kv
     )
@@ -3074,6 +3069,7 @@ async def kg_query(
             text_chunks_db,
             query_param,
             chunks_vdb,
+            use_model_func,
         )
     else:
         context_result = await _build_query_context(
@@ -3091,11 +3087,6 @@ async def kg_query(
     if context_result is None:
         logger.info("[kg_query] No query context could be built; returning no-result.")
         return None
-
-    # alightrag-insert
-    logger.debug(
-        f"[kg_query] retrieval completed"
-    )
 
     # Return different content based on query parameters
     if query_param.only_need_context and not query_param.only_need_prompt:
@@ -4460,6 +4451,7 @@ async def _alightrag_build_query_context(
     text_chunks_db: BaseKVStorage,
     query_param: QueryParam,
     chunks_vdb: BaseVectorStorage = None,
+    use_model_func: Callable[..., object] = None,
 ) -> QueryContextResult | None:
     """
     Main query context building function using the new 4-stage architecture:
@@ -4473,6 +4465,11 @@ async def _alightrag_build_query_context(
         return None
 
     # Stage 1: Pure search
+    # alightrag-insert
+    # retrieval call
+    logger.debug(
+        f"[_alightrag_build_query_context] retrieval started"
+    )
     search_result = await _perform_kg_search(
         query,
         ll_keywords,
@@ -4493,6 +4490,10 @@ async def _alightrag_build_query_context(
         "query_embedding": query_embedding,
     }
     '''
+    logger.debug(f"final_result: {search_result}")
+    logger.debug(
+        f"[_alightrag_build_query_context] retrieval completed"
+    )
 
     if not search_result["final_entities"] and not search_result["final_relations"]:
         if query_param.mode != "mix":
@@ -4503,6 +4504,7 @@ async def _alightrag_build_query_context(
 
     # alightrag-insert
     # TODO
+    user_query = query
     # --------------------------------------------------------------#
     # alightrag iter k
     # it=k
@@ -4519,14 +4521,12 @@ async def _alightrag_build_query_context(
     # --------------------------------------------------------------#
     # reasoning call
     logger.debug(
-        f"[kg_query] reasoning started"
+        f"[_alightrag_build_query_context] reasoning started"
     )
     reasoning_prompt_temp = PROMPTS["alightrag_reasoning"],
     reasoning_prompt = reasoning_prompt_temp.format(
-        response_type=response_type,
-        user_prompt=user_prompt,
-        entities=entities,
-        relationships=relationships,
+        entities=search_result["final_entities"],
+        relationships=search_result["final_relations"],
     )
     path_result = await use_model_func(
         user_query,
@@ -4547,20 +4547,18 @@ async def _alightrag_build_query_context(
     '''
     logger.debug(f"path_result: {path_result}")
     logger.debug(
-        f"[kg_query] reasoning completed"
+        f"[_alightrag_build_query_context] reasoning completed"
     )
     # --------------------------------------------------------------#
     # reflection call
     logger.debug(
-        f"[kg_query] reflection started"
+        f"[_alightrag_build_query_context] reflection started"
     )
     reflection_prompt_temp = PROMPTS["alightrag_reflection"]
     reflection_prompt = reflection_prompt_temp.format(
-        response_type=response_type,
-        question=user_prompt,
-        entities=entities,
-        relationships=relationships,
-        paths=paths,
+        entities=search_result["final_entities"],
+        relationships=search_result["final_relations"],
+        paths=path_result["paths"],
     )
     validated_context_result = await use_model_func(
         user_query,
@@ -4586,20 +4584,7 @@ async def _alightrag_build_query_context(
     '''
     logger.debug(f"validated_context_result: {validated_context_result}")
     logger.debug(
-        f"[kg_query] reflection completed"
-    )
-    # --------------------------------------------------------------#
-    # rebuild query context (unified interface)
-    alightrag_context_result = await _alightrag_build_query_context(
-        query,
-        ll_keywords_str,
-        hl_keywords_str,
-        knowledge_graph_inst,
-        entities_vdb,
-        relationships_vdb,
-        text_chunks_db,
-        query_param,
-        chunks_vdb,
+        f"[_alightrag_build_query_context] reflection completed"
     )
     # --------------------------------------------------------------#
 
