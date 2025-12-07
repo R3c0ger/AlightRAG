@@ -84,7 +84,7 @@ T = TypeVar("T")
 @dataclass
 class QueryParam:
     """Configuration parameters for query execution in AlightRAG."""
-    # alightrag-insert
+    # alightrag-insert TODO
     mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass", "alightrag"] = "mix"
     """Specifies the retrieval mode:
     - "local": Focuses on context-dependent information.

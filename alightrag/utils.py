@@ -3093,6 +3093,156 @@ def convert_to_user_format(
     }
 
 
+# alightrag-insert TODO
+def alightrag_convert_to_user_format(
+        entities_context: list[dict],
+        relations_context: list[dict],
+        chunks: list[dict],
+        references: list[dict],
+        query_mode: str,
+        entity_id_to_original: dict = None,
+        relation_id_to_original: dict = None,
+        paths_context: list[dict] = None,  # NEW: Add paths_context parameter
+) -> dict[str, Any]:
+    """Convert internal data format to user-friendly format using original database data"""
+
+    # Convert entities format using original data when available
+    formatted_entities = []
+    for entity in entities_context:
+        entity_name = entity.get("entity", "")
+
+        # Try to get original data first
+        original_entity = None
+        if entity_id_to_original and entity_name in entity_id_to_original:
+            original_entity = entity_id_to_original[entity_name]
+
+        if original_entity:
+            # Use original database data
+            formatted_entities.append(
+                {
+                    "entity_name": original_entity.get("entity_name", entity_name),
+                    "entity_type": original_entity.get("entity_type", "UNKNOWN"),
+                    "description": original_entity.get("description", ""),
+                    "source_id": original_entity.get("source_id", ""),
+                    "file_path": original_entity.get("file_path", "unknown_source"),
+                    "created_at": original_entity.get("created_at", ""),
+                }
+            )
+        else:
+            # Fallback to LLM context data (for backward compatibility)
+            formatted_entities.append(
+                {
+                    "entity_name": entity_name,
+                    "entity_type": entity.get("type", "UNKNOWN"),
+                    "description": entity.get("description", ""),
+                    "source_id": entity.get("source_id", ""),
+                    "file_path": entity.get("file_path", "unknown_source"),
+                    "created_at": entity.get("created_at", ""),
+                }
+            )
+
+    # Convert relationships format using original data when available
+    formatted_relationships = []
+    for relation in relations_context:
+        entity1 = relation.get("entity1", "")
+        entity2 = relation.get("entity2", "")
+        relation_key = (entity1, entity2)
+
+        # Try to get original data first
+        original_relation = None
+        if relation_id_to_original and relation_key in relation_id_to_original:
+            original_relation = relation_id_to_original[relation_key]
+
+        if original_relation:
+            # Use original database data
+            formatted_relationships.append(
+                {
+                    "src_id": original_relation.get("src_id", entity1),
+                    "tgt_id": original_relation.get("tgt_id", entity2),
+                    "description": original_relation.get("description", ""),
+                    "keywords": original_relation.get("keywords", ""),
+                    "weight": original_relation.get("weight", 1.0),
+                    "source_id": original_relation.get("source_id", ""),
+                    "file_path": original_relation.get("file_path", "unknown_source"),
+                    "created_at": original_relation.get("created_at", ""),
+                }
+            )
+        else:
+            # Fallback to LLM context data (for backward compatibility)
+            formatted_relationships.append(
+                {
+                    "src_id": entity1,
+                    "tgt_id": entity2,
+                    "description": relation.get("description", ""),
+                    "keywords": relation.get("keywords", ""),
+                    "weight": relation.get("weight", 1.0),
+                    "source_id": relation.get("source_id", ""),
+                    "file_path": relation.get("file_path", "unknown_source"),
+                    "created_at": relation.get("created_at", ""),
+                }
+            )
+
+    # NEW: Convert paths format (paths are already validated by AlightRAG)
+    formatted_paths = []
+    if paths_context:
+        for i, path_info in enumerate(paths_context):
+            # Paths from AlightRAG have format: {"path": "...", "is_valid": True, "reason": "..."}
+            # Or from paths_context: {"path": "...", "reason": "...", "order": i}
+            path_str = path_info.get("path", "")
+            reason = path_info.get("reason", "")
+            is_valid = path_info.get("is_valid", True)  # Default to True for paths_context
+
+            # Only include valid paths with non-empty path strings
+            if path_str and is_valid:
+                formatted_paths.append({
+                    "path": path_str,
+                    "reason": reason,
+                    "is_valid": True,
+                    "order": path_info.get("order", i + 1),
+                })
+
+    # Convert chunks format (chunks already contain complete data)
+    formatted_chunks = []
+    for i, chunk in enumerate(chunks):
+        chunk_data = {
+            "reference_id": chunk.get("reference_id", ""),
+            "content": chunk.get("content", ""),
+            "file_path": chunk.get("file_path", "unknown_source"),
+            "chunk_id": chunk.get("chunk_id", ""),
+        }
+        formatted_chunks.append(chunk_data)
+
+    logger.debug(
+        f"[convert_to_user_format] Formatted {len(formatted_entities)} entities, "
+        f"{len(formatted_relationships)} relationships, "
+        f"{len(formatted_paths)} paths, "  # NEW: Log paths count
+        f"{len(formatted_chunks)} chunks"
+    )
+
+    # Build basic metadata (metadata details will be added by calling functions)
+    metadata = {
+        "query_mode": query_mode,
+        "keywords": {
+            "high_level": [],
+            "low_level": [],
+        },  # Placeholder, will be set by calling functions
+        "path_count": len(formatted_paths),  # NEW: Add path count to metadata
+    }
+
+    return {
+        "status": "success",
+        "message": "Query processed successfully",
+        "data": {
+            "entities": formatted_entities,
+            "relationships": formatted_relationships,
+            "paths": formatted_paths,  # NEW: Add paths to data
+            "chunks": formatted_chunks,
+            "references": references,
+        },
+        "metadata": metadata,
+    }
+
+
 def generate_reference_list_from_chunks(
     chunks: list[dict],
 ) -> tuple[list[dict], list[dict]]:

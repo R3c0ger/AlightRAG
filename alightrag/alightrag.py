@@ -2662,7 +2662,7 @@ class AlightRAG:
 
         try:
             query_result = None
-            # alightrag-insert
+            # alightrag-insert TODO
             if param.mode in ["local", "global", "hybrid", "mix", "alightrag"]:
                 query_result = await kg_query(
                     query.strip(),

@@ -420,7 +420,7 @@ Output:
 """,
 ]
 
-# alightrag-insert
+# alightrag-insert TODO
 PROMPTS["alightrag_retrieval"] = """
 ---Entities & Relationships---
 {context_data}
@@ -721,7 +721,7 @@ Knowledge Graph Data (Relationship):
 {relations_str}
 ```
 
-Knowledge Graph Data (Validated Path):
+Knowledge Graph Data (Reasoning Path):
 
 ```json
 {paths_str}
