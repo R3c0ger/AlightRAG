@@ -3062,17 +3062,31 @@ async def kg_query(
     hl_keywords_str = ", ".join(hl_keywords) if hl_keywords else ""
 
     # Build query context (unified interface)
-    context_result = await _build_query_context(
-        query,
-        ll_keywords_str,
-        hl_keywords_str,
-        knowledge_graph_inst,
-        entities_vdb,
-        relationships_vdb,
-        text_chunks_db,
-        query_param,
-        chunks_vdb,
-    )
+    # alightrag-insert
+    if query_param.mode == "alightrag":
+        context_result = await _alightrag_build_query_context(
+            query,
+            ll_keywords_str,
+            hl_keywords_str,
+            knowledge_graph_inst,
+            entities_vdb,
+            relationships_vdb,
+            text_chunks_db,
+            query_param,
+            chunks_vdb,
+        )
+    else:
+        context_result = await _build_query_context(
+            query,
+            ll_keywords_str,
+            hl_keywords_str,
+            knowledge_graph_inst,
+            entities_vdb,
+            relationships_vdb,
+            text_chunks_db,
+            query_param,
+            chunks_vdb,
+        )
 
     if context_result is None:
         logger.info("[kg_query] No query context could be built; returning no-result.")
@@ -3097,7 +3111,14 @@ async def kg_query(
     )
 
     # Build system prompt
-    sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
+    # alightrag-insert
+    # sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
+    if system_prompt:
+        sys_prompt_temp=system_prompt
+    elif query_param.mode == "alightrag":
+        sys_prompt_temp = PROMPTS["alightrag_response"]
+    else:
+        sys_prompt_temp=PROMPTS["rag_response"]
     sys_prompt = sys_prompt_temp.format(
         response_type=response_type,
         user_prompt=user_prompt,
@@ -3144,140 +3165,22 @@ async def kg_query(
         )
         response = cached_response
     else:
+        # response call
         # alightrag-insert
-        # --------------------------------------------------------------#
-        # alightrag iter k
-        # it=k
-        # while query_param.mode == "alightrag":
-        #     # reasoning call
-        #     # reflection call
-        #     it += 1
-        #     if reflection.condition or it >= k:
-        #         break
-        #     else:
-        #         # retrieval call
-        # --------------------------------------------------------------#
-        # alightrag iter 1
-        if query_param.mode == "alightrag":
-            # alightrag
-            # --------------------------------------------------------------#
-            # reasoning call
-            logger.debug(
-                f"[kg_query] reasoning started"
-            )
-            reasoning_prompt_temp = PROMPTS["alightrag_reasoning"],
-            reasoning_prompt = reasoning_prompt_temp.format(
-                response_type=response_type,
-                user_prompt=user_prompt,
-                context_data=context_result.context, # TODO modify context?
-            )
-            path_result = await use_model_func(
-                user_query,
-                system_prompt=reasoning_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
-            '''
-            {
-              "paths": [
-                "Entity1",
-                "Entity2 -> rel1 -> Entity3",
-                "Entity4 -> rel2 -> Entity5 -> rel3 -> Entity6"
-              ],
-              "explanation": "Brief explanation of how the paths answer the question."
-            }
-            '''
-            logger.debug(f"path_result: {path_result}")
-            logger.debug(
-                f"[kg_query] reasoning completed"
-            )
-            #--------------------------------------------------------------#
-            # reflection call
-            logger.debug(
-                f"[kg_query] reflection started"
-            )
-            reflection_prompt_temp = PROMPTS["alightrag_reflection"]
-            reflection_prompt = reflection_prompt_temp.format(
-                response_type=response_type,
-                user_prompt=user_prompt,
-                context_data=context_result.context, # TODO modify context?
-            )
-            validated_context_result = await use_model_func(
-                user_query,
-                system_prompt=reflection_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
-            '''
-            {
-              "validated_paths": [
-                {
-                  "path": "Original path string",
-                  "is_valid": true/false,
-                  "reason": "Brief explanation of why the path is valid or invalid, referencing the rules."
-                }
-              ],
-              "filtered_entities": "Comma-separated list of unique entities from valid paths (or empty string if none).",
-              "filtered_relationships": "Semicolon-separated list of unique triples from valid paths (or empty string if none).",
-              "overall_explanation": "Summary of how the valid paths (if any) collectively answer the question, or why none do and what is missing.",
-              "supplementary_questions": ["If insufficient, list 1-3 new questions here as strings; otherwise, omit this key."]
-            }
-            '''
-            logger.debug(f"validated_context_result: {validated_context_result}")
-            logger.debug(
-                f"[kg_query] reflection completed"
-            )
-            # --------------------------------------------------------------#
-            # response call
-            logger.debug(
-                f"[kg_query] response started"
-            )
-            sys_prompt_temp = PROMPTS["alightrag_response"]
-            sys_prompt = sys_prompt_temp.format(
-                response_type=response_type,
-                user_prompt=user_prompt,
-                context_data=context_result.context, # # TODO modify context?
-            )
-            # TODO post-processing?
-            response = await use_model_func(
-                user_query,
-                system_prompt=sys_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
-            '''
-            # Answer
-            [Direct, concise answer to the question.]
-            
-            ## Reasoning Paths
-            - Path 1: [Copy the first path]  
-              Explanation: [Briefly explain how this path derives the answer, referencing entities and relationships.]
-            - Path 2: [If applicable, copy the second path]  
-              Explanation: [Brief explanation.]
-            
-            ## Supporting Details
-            - [Bullet points with additional context from entities/relationships, if needed to elaborate without redundancy.]
-            '''
-            logger.debug(f"response: {response}")
-            logger.debug(
-                f"[kg_query] response completed"
-            )
-            # --------------------------------------------------------------#
-        else:
-            # --------------------------------------------------------------#
-            # lightrag
-            # response call
-            response = await use_model_func(
-                user_query,
-                system_prompt=sys_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
-            # --------------------------------------------------------------#
+        logger.debug(
+            f"[kg_query] response started"
+        )
+        response = await use_model_func(
+            user_query,
+            system_prompt=sys_prompt,
+            history_messages=query_param.conversation_history,
+            enable_cot=True,
+            stream=query_param.stream,
+        )
+        logger.debug(f"response: {response}")
+        logger.debug(
+            f"[kg_query] response completed"
+        )
 
         if hashing_kv and hashing_kv.global_config.get("enable_llm_cache"):
             queryparam_dict = {
@@ -4190,6 +4093,229 @@ async def _build_context_str(
     return result, final_data # prompt-templated context, detailed/formatted data
 
 
+# alightrag-insert
+async def _alightrag_build_context_str(
+    entities_context: list[dict],
+    relations_context: list[dict],
+    merged_chunks: list[dict],
+    query: str,
+    query_param: QueryParam,
+    global_config: dict[str, str],
+    chunk_tracking: dict = None,
+    entity_id_to_original: dict = None,
+    relation_id_to_original: dict = None,
+) -> tuple[str, dict[str, Any]]:
+    """
+    Build the final LLM context string with token processing.
+    This includes dynamic token calculation and final chunk truncation.
+    """
+    tokenizer = global_config.get("tokenizer")
+    if not tokenizer:
+        logger.error("Missing tokenizer, cannot build LLM context")
+        # Return empty raw data structure when no tokenizer
+        empty_raw_data = convert_to_user_format(
+            [],
+            [],
+            [],
+            [],
+            query_param.mode,
+        )
+        empty_raw_data["status"] = "failure"
+        empty_raw_data["message"] = "Missing tokenizer, cannot build LLM context."
+        return "", empty_raw_data
+
+    # Get token limits
+    max_total_tokens = getattr(
+        query_param,
+        "max_total_tokens",
+        global_config.get("max_total_tokens", DEFAULT_MAX_TOTAL_TOKENS),
+    )
+
+    # Get the system prompt template from PROMPTS or global_config
+    sys_prompt_template = global_config.get(
+        "system_prompt_template", PROMPTS["rag_response"]
+    )
+
+    kg_context_template = PROMPTS["kg_query_context"]
+    user_prompt = query_param.user_prompt if query_param.user_prompt else ""
+    response_type = (
+        query_param.response_type
+        if query_param.response_type
+        else "Multiple Paragraphs"
+    )
+
+    entities_str = "\n".join(
+        json.dumps(entity, ensure_ascii=False) for entity in entities_context
+    )
+    relations_str = "\n".join(
+        json.dumps(relation, ensure_ascii=False) for relation in relations_context
+    )
+
+    # Calculate preliminary kg context tokens
+    pre_kg_context = kg_context_template.format(
+        entities_str=entities_str,
+        relations_str=relations_str,
+        text_chunks_str="",
+        reference_list_str="",
+    )
+    kg_context_tokens = len(tokenizer.encode(pre_kg_context))
+
+    # Calculate preliminary system prompt tokens
+    pre_sys_prompt = sys_prompt_template.format(
+        context_data="",  # Empty for overhead calculation
+        response_type=response_type,
+        user_prompt=user_prompt,
+    )
+    sys_prompt_tokens = len(tokenizer.encode(pre_sys_prompt))
+
+    # Calculate available tokens for text chunks
+    query_tokens = len(tokenizer.encode(query))
+    buffer_tokens = 200  # reserved for reference list and safety buffer
+    available_chunk_tokens = max_total_tokens - (
+        sys_prompt_tokens + kg_context_tokens + query_tokens + buffer_tokens
+    )
+
+    logger.debug(
+        f"Token allocation - Total: {max_total_tokens}, SysPrompt: {sys_prompt_tokens}, Query: {query_tokens}, KG: {kg_context_tokens}, Buffer: {buffer_tokens}, Available for chunks: {available_chunk_tokens}"
+    )
+
+    # Apply token truncation to chunks using the dynamic limit
+    truncated_chunks = await process_chunks_unified(
+        query=query,
+        unique_chunks=merged_chunks,
+        query_param=query_param,
+        global_config=global_config,
+        source_type=query_param.mode,
+        chunk_token_limit=available_chunk_tokens,  # Pass dynamic limit
+    )
+
+    # Generate reference list from truncated chunks using the new common function
+    reference_list, truncated_chunks = generate_reference_list_from_chunks(
+        truncated_chunks
+    )
+
+    # Rebuild chunks_context with truncated chunks
+    # The actual tokens may be slightly less than available_chunk_tokens due to deduplication logic
+    chunks_context = []
+    for i, chunk in enumerate(truncated_chunks):
+        chunks_context.append(
+            {
+                "reference_id": chunk["reference_id"],
+                "content": chunk["content"],
+            }
+        )
+
+    text_units_str = "\n".join(
+        json.dumps(text_unit, ensure_ascii=False) for text_unit in chunks_context
+    )
+    reference_list_str = "\n".join(
+        f"[{ref['reference_id']}] {ref['file_path']}"
+        for ref in reference_list
+        if ref["reference_id"]
+    )
+
+    logger.info(
+        f"Final context: {len(entities_context)} entities, {len(relations_context)} relations, {len(chunks_context)} chunks"
+    )
+
+    # not necessary to use LLM to generate a response
+    if not entities_context and not relations_context and not chunks_context:
+        # Return empty raw data structure when no entities/relations
+        empty_raw_data = convert_to_user_format(
+            [],
+            [],
+            [],
+            [],
+            query_param.mode,
+        )
+        empty_raw_data["status"] = "failure"
+        empty_raw_data["message"] = "Query returned empty dataset."
+        return "", empty_raw_data
+
+    # output chunks tracking infomations
+    # format: <source><frequency>/<order> (e.g., E5/2 R2/1 C1/1)
+    if truncated_chunks and chunk_tracking:
+        chunk_tracking_log = []
+        for chunk in truncated_chunks:
+            chunk_id = chunk.get("chunk_id")
+            if chunk_id and chunk_id in chunk_tracking:
+                tracking_info = chunk_tracking[chunk_id]
+                source = tracking_info["source"]
+                frequency = tracking_info["frequency"]
+                order = tracking_info["order"]
+                chunk_tracking_log.append(f"{source}{frequency}/{order}")
+            else:
+                chunk_tracking_log.append("?0/0")
+
+        if chunk_tracking_log:
+            logger.info(f"Final chunks S+F/O: {' '.join(chunk_tracking_log)}")
+
+    result = kg_context_template.format(
+        entities_str=entities_str,
+        relations_str=relations_str,
+        text_chunks_str=text_units_str,
+        reference_list_str=reference_list_str,
+    )
+    """
+    Knowledge Graph Data (Entity):
+
+    ```json
+    {entities_str}
+    ```
+
+    Knowledge Graph Data (Relationship):
+
+    ```json
+    {relations_str}
+    ```
+
+    Document Chunks (Each entry has a reference_id refer to the `Reference Document List`):
+
+    ```json
+    {text_chunks_str}
+    ```
+
+    Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Document Chunks):
+
+    ```
+    {reference_list_str}
+    ```
+
+    """
+
+    # Always return both context and complete data structure (unified approach)
+    logger.debug(
+        f"[_build_context_str] Converting to user format: {len(entities_context)} entities, {len(relations_context)} relations, {len(truncated_chunks)} chunks"
+    )
+    final_data = convert_to_user_format(
+        entities_context,
+        relations_context,
+        truncated_chunks,
+        reference_list,
+        query_param.mode,
+        entity_id_to_original,
+        relation_id_to_original,
+    )
+    '''
+    return {
+        "status": "success",
+        "message": "Query processed successfully",
+        "data": {
+            "entities": formatted_entities,
+            "relationships": formatted_relationships,
+            "chunks": formatted_chunks,
+            "references": references,
+        },
+        "metadata": metadata,
+    }
+    '''
+    logger.debug(
+        f"[_build_context_str] Final data after conversion: {len(final_data.get('entities', []))} entities, {len(final_data.get('relationships', []))} relationships, {len(final_data.get('chunks', []))} chunks"
+    )
+    return result, final_data # prompt-templated context, detailed/formatted data
+
+
+
 # Now let's update the old _build_query_context to use the new architecture
 async def _build_query_context(
     query: str,
@@ -4375,6 +4501,108 @@ async def _alightrag_build_query_context(
             if not search_result["chunk_tracking"]:
                 return None
 
+    # alightrag-insert
+    # TODO
+    # --------------------------------------------------------------#
+    # alightrag iter k
+    # it=k
+    # while query_param.mode == "alightrag":
+    #     # reasoning call
+    #     # reflection call
+    #     it += 1
+    #     if reflection.condition or it >= k:
+    #         break
+    #     else:
+    #         # retrieval call
+    # --------------------------------------------------------------#
+    # alightrag iter 1
+    # --------------------------------------------------------------#
+    # reasoning call
+    logger.debug(
+        f"[kg_query] reasoning started"
+    )
+    reasoning_prompt_temp = PROMPTS["alightrag_reasoning"],
+    reasoning_prompt = reasoning_prompt_temp.format(
+        response_type=response_type,
+        user_prompt=user_prompt,
+        entities=entities,
+        relationships=relationships,
+    )
+    path_result = await use_model_func(
+        user_query,
+        system_prompt=reasoning_prompt,
+        history_messages=query_param.conversation_history,
+        enable_cot=True,
+        stream=query_param.stream,
+    )
+    '''
+    {
+      "paths": [
+        "Entity1",
+        "Entity2 -> rel1 -> Entity3",
+        "Entity4 -> rel2 -> Entity5 -> rel3 -> Entity6"
+      ],
+      "explanation": "Brief explanation of how the paths answer the question."
+    }
+    '''
+    logger.debug(f"path_result: {path_result}")
+    logger.debug(
+        f"[kg_query] reasoning completed"
+    )
+    # --------------------------------------------------------------#
+    # reflection call
+    logger.debug(
+        f"[kg_query] reflection started"
+    )
+    reflection_prompt_temp = PROMPTS["alightrag_reflection"]
+    reflection_prompt = reflection_prompt_temp.format(
+        response_type=response_type,
+        question=user_prompt,
+        entities=entities,
+        relationships=relationships,
+        paths=paths,
+    )
+    validated_context_result = await use_model_func(
+        user_query,
+        system_prompt=reflection_prompt,
+        history_messages=query_param.conversation_history,
+        enable_cot=True,
+        stream=query_param.stream,
+    )
+    '''
+    {
+      "validated_paths": [
+        {
+          "path": "Original path string",
+          "is_valid": true/false,
+          "reason": "Brief explanation of why the path is valid or invalid, referencing the rules."
+        }
+      ],
+      "filtered_entities": "Comma-separated list of unique entities from valid paths (or empty string if none).",
+      "filtered_relationships": "Semicolon-separated list of unique triples from valid paths (or empty string if none).",
+      "overall_explanation": "Summary of how the valid paths (if any) collectively answer the question, or why none do and what is missing.",
+      "supplementary_questions": ["If insufficient, list 1-3 new questions here as strings; otherwise, omit this key."]
+    }
+    '''
+    logger.debug(f"validated_context_result: {validated_context_result}")
+    logger.debug(
+        f"[kg_query] reflection completed"
+    )
+    # --------------------------------------------------------------#
+    # rebuild query context (unified interface)
+    alightrag_context_result = await _alightrag_build_query_context(
+        query,
+        ll_keywords_str,
+        hl_keywords_str,
+        knowledge_graph_inst,
+        entities_vdb,
+        relationships_vdb,
+        text_chunks_db,
+        query_param,
+        chunks_vdb,
+    )
+    # --------------------------------------------------------------#
+
     # Stage 2: Apply token truncation for LLM efficiency
     truncation_result = await _apply_token_truncation(
         search_result,
@@ -4405,6 +4633,8 @@ async def _alightrag_build_query_context(
 
     # Stage 4: Build final LLM context with dynamic token processing
     # _build_context_str now always returns tuple[str, dict]
+    # alightrag-insert
+    # TODO
     context, raw_data = await _build_context_str(
         entities_context=truncation_result["entities_context"],
         relations_context=truncation_result["relations_context"],
