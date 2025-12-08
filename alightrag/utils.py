@@ -3186,20 +3186,26 @@ def alightrag_convert_to_user_format(
     formatted_paths = []
     if paths_context:
         for i, path_info in enumerate(paths_context):
-            # Paths from AlightRAG have format: {"path": "...", "is_valid": True, "reason": "..."}
-            # Or from paths_context: {"path": "...", "reason": "...", "order": i}
-            path_str = path_info.get("path", "")
-            reason = path_info.get("reason", "")
-            is_valid = path_info.get("is_valid", True)  # Default to True for paths_context
-
-            # Only include valid paths with non-empty path strings
-            if path_str and is_valid:
+            if isinstance(path_info, str):
+                # Path format: "ent -> rel -> ent"
                 formatted_paths.append({
-                    "path": path_str,
-                    "reason": reason,
+                    "path": path_info,
+                    "reason": None,
                     "is_valid": True,
-                    "order": path_info.get("order", i + 1),
                 })
+            else:
+                # Path format: {"path": "...", "is_valid": True, "reason": "..."}
+                path_str = path_info.get("path", "")
+                reason = path_info.get("reason", "")
+                is_valid = path_info.get("is_valid", True)  # Default to True for paths_context
+
+                # Only include valid paths with non-empty path strings
+                if path_str and is_valid:
+                    formatted_paths.append({
+                        "path": path_str,
+                        "reason": reason,
+                        "is_valid": True,
+                    })
 
     # Convert chunks format (chunks already contain complete data)
     formatted_chunks = []

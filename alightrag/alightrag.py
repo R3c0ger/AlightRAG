@@ -2379,6 +2379,8 @@ class AlightRAG:
         query: str,
         param: QueryParam = QueryParam(),
         system_prompt: str | None = None,
+        use_reasoning: bool = True,
+        use_reflection: bool = True,
     ) -> str | AsyncIterator[str]:
         """
         Perform a async query (backward compatibility wrapper).
@@ -2398,7 +2400,7 @@ class AlightRAG:
                 - Streaming: Returns AsyncIterator[str]
         """
         # Call the new aquery_llm function to get complete results
-        result = await self.aquery_llm(query, param, system_prompt)
+        result = await self.aquery_llm(query, param, system_prompt, use_reasoning, use_reflection)
 
         # Extract and return only the LLM response for backward compatibility
         llm_response = result.get("llm_response", {})
@@ -2641,6 +2643,8 @@ class AlightRAG:
         query: str,
         param: QueryParam = QueryParam(),
         system_prompt: str | None = None,
+        use_reasoning: bool = True,
+        use_reflection: bool = True,
     ) -> dict[str, Any]:
         """
         Asynchronous complete query API: returns structured retrieval results with LLM generation.
@@ -2675,6 +2679,8 @@ class AlightRAG:
                     hashing_kv=self.llm_response_cache,
                     system_prompt=system_prompt,
                     chunks_vdb=self.chunks_vdb,
+                    use_reasoning=use_reasoning,
+                    use_reflection=use_reflection,
                 )
             elif param.mode == "naive":
                 query_result = await naive_query(

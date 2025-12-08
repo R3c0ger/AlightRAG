@@ -2994,6 +2994,8 @@ async def kg_query(
     hashing_kv: BaseKVStorage | None = None,
     system_prompt: str | None = None,
     chunks_vdb: BaseVectorStorage = None,
+    use_reasoning: bool = True,
+    use_reflection: bool = False,
 ) -> QueryResult | None:
     """
     Execute knowledge graph query and return unified QueryResult object.
@@ -3071,6 +3073,8 @@ async def kg_query(
             query_param,
             chunks_vdb,
             use_model_func,
+            use_reasoning,
+            use_reflection,
         )
     else:
         context_result = await _build_query_context(
@@ -3182,7 +3186,7 @@ async def kg_query(
                 enable_cot=True,
                 stream=query_param.stream,
             )
-        logger.info(f"response: {response}")
+        logger.info(f"response -> {response}")
         logger.info(
             f"[kg_query] response completed"
         )
@@ -3994,7 +3998,7 @@ async def _build_context_str(
     reference_list_str = "\n".join(
         f"[{ref['reference_id']}] {ref['file_path']}"
         for ref in reference_list
-        if ref["reference_id"]
+        if ref['reference_id']
     )
 
     logger.info(
@@ -4237,9 +4241,9 @@ async def _alightrag_build_context_str(
         json.dumps(text_unit, ensure_ascii=False) for text_unit in chunks_context
     )
     reference_list_str = "\n".join(
-        f"[{ref.get("reference_id","")}] {ref.get('file_path')}"
+        f"[{ref.get('reference_id','')}] {ref.get('file_path')}"
         for ref in reference_list
-        if ref.get("reference_id")
+        if ref.get('reference_id')
     )
 
     logger.info(
@@ -4481,6 +4485,8 @@ async def _alightrag_build_query_context(
         query_param: QueryParam,
         chunks_vdb: BaseVectorStorage = None,
         use_model_func: Callable[..., object] = None,
+        use_reasoning: bool = True,
+        use_reflection: bool = True,
 ) -> QueryContextResult | None:
     """
     Main query context building function using AlightRAG architecture:
@@ -4521,7 +4527,7 @@ async def _alightrag_build_query_context(
             # or a generic term
             # rel_text = description[:50] if description else (keywords if keywords else "related to")
             # rel_text = description if description else (keywords if keywords else "related to")
-            max_rel_length = 50
+            max_rel_length = 100
             if description:
                 rel_text = description[:max_rel_length] + "..." if len(description) > max_rel_length else description
             elif keywords:
@@ -4656,6 +4662,10 @@ async def _alightrag_build_query_context(
     user_query = query
     max_iterations = 3  # Default
     current_iteration = 0
+    is_sufficient = False
+    supplementary_questions = []
+    retrieval_query = query
+    path_result = {}
 
     # Initialize with empty search result
     search_result = {
@@ -4667,7 +4677,6 @@ async def _alightrag_build_query_context(
         "final_paths": []
     }
 
-    retrieval_query = query
     while current_iteration < max_iterations:
         current_iteration += 1
         logger.info(f"[AlightRAG] Starting iteration {current_iteration}/{max_iterations}")
@@ -4734,149 +4743,154 @@ async def _alightrag_build_query_context(
         logger.info(f"[AlightRAG] Formatted relations: {relations_str[:100]}...")
 
         # Phase 2: Reasoning
-        logger.info("[AlightRAG] Reasoning started")
-        try:
-            reasoning_prompt = PROMPTS["alightrag_reasoning"]
+        if use_reasoning:
+            logger.info("[AlightRAG] Reasoning started")
+            try:
+                reasoning_prompt = PROMPTS["alightrag_reasoning"]
 
-            reasoning_query = PROMPTS["alightrag_reasoning_query"].format(
-                entities=entities_str,
-                relationships=relations_str,
-                question=user_query,
-            )
+                reasoning_query = PROMPTS["alightrag_reasoning_query"].format(
+                    entities=entities_str,
+                    relationships=relations_str,
+                    question=user_query,
+                )
 
-            reasoning_response = await use_model_func(
-                reasoning_query,
-                system_prompt=reasoning_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
+                reasoning_response = await use_model_func(
+                    reasoning_query,
+                    system_prompt=reasoning_prompt,
+                    history_messages=query_param.conversation_history,
+                    enable_cot=True,
+                    stream=query_param.stream,
+                )
 
-            logger.info(f"[AlightRAG] reasoning_response -> {reasoning_response}")
+                logger.info(f"[AlightRAG] reasoning_response -> {reasoning_response}")
 
-            # Parse JSON response
-            path_result = extract_json_from_response(reasoning_response)
-            if not path_result:
+                # Parse JSON response
+                path_result = extract_json_from_response(reasoning_response)
+                if not path_result:
+                    path_result = {"paths": [], "explanation": "Reasoning failed"}
+
+                logger.info(f"[AlightRAG] Reasoning completed: {len(path_result.get('paths', []))} paths found")
+
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"[AlightRAG] Reasoning failed: {e}")
                 path_result = {"paths": [], "explanation": "Reasoning failed"}
 
-            logger.info(f"[AlightRAG] Reasoning completed: {len(path_result.get('paths', []))} paths found")
-
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"[AlightRAG] Reasoning failed: {e}")
-            path_result = {"paths": [], "explanation": "Reasoning failed"}
+            if not use_reflection:
+                search_result["final_paths"].extend(path_result.get("paths", []))
 
         # Phase 3: Reflection
-        logger.info("[AlightRAG] Reflection started")
-        try:
-            reflection_prompt = PROMPTS["alightrag_reflection"]
+        if use_reflection:
+            logger.info("[AlightRAG] Reflection started")
+            try:
+                reflection_prompt = PROMPTS["alightrag_reflection"]
 
-            reflection_query = PROMPTS["alightrag_reflection_query"].format(
-                entities=entities_str,
-                relationships=relations_str,
-                paths=json.dumps(path_result.get("paths", [])),
-                question=user_query,
-            )
+                reflection_query = PROMPTS["alightrag_reflection_query"].format(
+                    entities=entities_str,
+                    relationships=relations_str,
+                    paths=json.dumps(path_result.get("paths", [])),
+                    question=user_query,
+                )
 
-            reflection_response = await use_model_func(
-                reflection_query,
-                system_prompt=reflection_prompt,
-                history_messages=query_param.conversation_history,
-                enable_cot=True,
-                stream=query_param.stream,
-            )
+                reflection_response = await use_model_func(
+                    reflection_query,
+                    system_prompt=reflection_prompt,
+                    history_messages=query_param.conversation_history,
+                    enable_cot=True,
+                    stream=query_param.stream,
+                )
 
-            logger.info(f"[AlightRAG] reflection_response -> {reflection_response}")
+                logger.info(f"[AlightRAG] reflection_response -> {reflection_response}")
 
-            # Parse JSON response
-            validation_result = extract_json_from_response(reflection_response)
-            # Ensure required keys exist
-            if not validation_result:
+                # Parse JSON response
+                validation_result = extract_json_from_response(reflection_response)
+                # Ensure required keys exist
+                if not validation_result:
+                    validation_result = {
+                        "validated_paths": [],
+                        "filtered_entities": "",
+                        "filtered_relationships": "",
+                        "overall_explanation": "Failed to parse reflection response"
+                    }
+
+                logger.info(f"[AlightRAG] Reflection completed: "
+                             f"{sum(1 for p in validation_result.get('validated_paths', []) if p.get('is_valid'))} valid paths")
+
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"[AlightRAG] Reflection failed: {e}")
                 validation_result = {
                     "validated_paths": [],
                     "filtered_entities": "",
                     "filtered_relationships": "",
-                    "overall_explanation": "Failed to parse reflection response"
+                    "overall_explanation": "Reflection failed"
                 }
 
-            logger.info(f"[AlightRAG] Reflection completed: "
-                         f"{sum(1 for p in validation_result.get('validated_paths', []) if p.get('is_valid'))} valid paths")
+            # -----------------------------------------------------------
+            # # TODO when no filtered ent or rel, the corresponding search_res would be emptied
+            # # Update search result with filtered data
+            # filtered_entities = validation_result.get("filtered_entities", "")
+            # filtered_relations = validation_result.get("filtered_relationships", "")
+            #
+            # # Convert comma-separated strings back to lists
+            # filtered_entity_names = [e.strip() for e in filtered_entities.split(",")
+            #                          if e.strip()] if filtered_entities else []
+            #
+            # # Parse relationship triples
+            # filtered_relation_tuples = []
+            # if filtered_relations:
+            #     for triple_str in filtered_relations.split(";"):
+            #         triple_str = triple_str.strip()
+            #         if triple_str.startswith("(") and triple_str.endswith(")"):
+            #             triple_str = triple_str[1:-1]  # Remove parentheses
+            #             parts = [p.strip() for p in triple_str.split(",")]
+            #             if len(parts) == 3:
+            #                 filtered_relation_tuples.append(tuple(parts))
+            #
+            # # Use your helper function to reconstruct in correct format!
+            # formatted_filtered_result = reconstruct_search_result(
+            #     filtered_entities=filtered_entity_names,
+            #     filtered_relations=filtered_relation_tuples,
+            #     original_search_result=iteration_search_result  # Use iteration data as original
+            # )
+            #
+            #
+            # # Now update search_result with the properly formatted data
+            # search_result["final_entities"] = formatted_filtered_result["final_entities"]
+            # search_result["final_relations"] = formatted_filtered_result["final_relations"]
+            # -----------------------------------------------------------
 
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"[AlightRAG] Reflection failed: {e}")
-            validation_result = {
-                "validated_paths": [],
-                "filtered_entities": "",
-                "filtered_relationships": "",
-                "overall_explanation": "Reflection failed"
-            }
+            # non-path filtering
+            # iteration_search_result["final_paths"] = validation_result.get("validated_paths", [])
 
-        # -----------------------------------------------------------
-        # # TODO when no filtered ent or rel, the corresponding search_res would be emptied
-        # # Update search result with filtered data
-        # filtered_entities = validation_result.get("filtered_entities", "")
-        # filtered_relations = validation_result.get("filtered_relationships", "")
-        #
-        # # Convert comma-separated strings back to lists
-        # filtered_entity_names = [e.strip() for e in filtered_entities.split(",")
-        #                          if e.strip()] if filtered_entities else []
-        #
-        # # Parse relationship triples
-        # filtered_relation_tuples = []
-        # if filtered_relations:
-        #     for triple_str in filtered_relations.split(";"):
-        #         triple_str = triple_str.strip()
-        #         if triple_str.startswith("(") and triple_str.endswith(")"):
-        #             triple_str = triple_str[1:-1]  # Remove parentheses
-        #             parts = [p.strip() for p in triple_str.split(",")]
-        #             if len(parts) == 3:
-        #                 filtered_relation_tuples.append(tuple(parts))
-        #
-        # # Use your helper function to reconstruct in correct format!
-        # formatted_filtered_result = reconstruct_search_result(
-        #     filtered_entities=filtered_entity_names,
-        #     filtered_relations=filtered_relation_tuples,
-        #     original_search_result=iteration_search_result  # Use iteration data as original
-        # )
-        #
-        #
-        # # Now update search_result with the properly formatted data
-        # search_result["final_entities"] = formatted_filtered_result["final_entities"]
-        # search_result["final_relations"] = formatted_filtered_result["final_relations"]
-        # -----------------------------------------------------------
+            # path fitering
+            # Get all validated paths from reflection
+            validated_paths = validation_result.get("validated_paths", [])
 
-        # non-path filtering
-        # iteration_search_result["final_paths"] = validation_result.get("validated_paths", [])
+            # Filter to keep only valid paths
+            valid_paths_this_iteration = []
+            for path_info in validated_paths:
+                if path_info.get("is_valid", False):
+                    # valid_paths_this_iteration.append(path_info)
+                    # Add iteration info to path for tracking
+                    path_info_with_iteration = path_info.copy()
+                    path_info_with_iteration["iteration"] = current_iteration
+                    valid_paths_this_iteration.append(path_info_with_iteration)
+                else:
+                    logger.info(f"[AlightRAG] Discarding invalid path: {path_info.get('path')} - Reason: {path_info.get('reason', 'No reason provided')}")
 
-        # path fitering
-        # Get all validated paths from reflection
-        validated_paths = validation_result.get("validated_paths", [])
+            # Store only valid paths
+            iteration_search_result["final_paths"] = valid_paths_this_iteration
 
-        # Filter to keep only valid paths
-        valid_paths_this_iteration = []
-        for path_info in validated_paths:
-            if path_info.get("is_valid", False):
-                # valid_paths_this_iteration.append(path_info)
-                # Add iteration info to path for tracking
-                path_info_with_iteration = path_info.copy()
-                path_info_with_iteration["iteration"] = current_iteration
-                valid_paths_this_iteration.append(path_info_with_iteration)
-            else:
-                logger.info(f"[AlightRAG] Discarding invalid path: {path_info.get('path')} - Reason: {path_info.get('reason', 'No reason provided')}")
+            # UNION: Add this iteration's valid paths to accumulated paths
+            search_result["final_paths"].extend(valid_paths_this_iteration)
 
-        # Store only valid paths
-        iteration_search_result["final_paths"] = valid_paths_this_iteration
+            # Log the filtering result
+            logger.info(f"[AlightRAG] Iteration {current_iteration}: Found {len(validated_paths)} paths")
+            logger.info(f"[AlightRAG] After path filtering: {len(valid_paths_this_iteration)}/{len(validated_paths)} paths are valid")
+            logger.info(f"[AlightRAG] Total accumulated paths: {len(search_result['final_paths'])}")
 
-        # UNION: Add this iteration's valid paths to accumulated paths
-        search_result["final_paths"].extend(valid_paths_this_iteration)
-
-        # Log the filtering result
-        logger.info(f"[AlightRAG] Iteration {current_iteration}: Found {len(validated_paths)} paths")
-        logger.info(f"[AlightRAG] After path filtering: {len(valid_paths_this_iteration)}/{len(validated_paths)} paths are valid")
-        logger.info(f"[AlightRAG] Total accumulated paths: {len(search_result['final_paths'])}")
-
-        # Check if we should continue iterating
-        supplementary_questions = validation_result.get("supplementary_questions", [])
-        is_sufficient = not supplementary_questions
+            # Check if we should continue iterating
+            supplementary_questions = validation_result.get("supplementary_questions", [])
+            is_sufficient = not supplementary_questions
 
         if is_sufficient:
             logger.info("[AlightRAG] Paths are sufficient, stopping iteration")
@@ -4966,8 +4980,7 @@ async def _alightrag_build_query_context(
         "total_iterations": current_iteration,
         "total_entities_found": len(search_result.get("final_entities", [])),
         "total_relations_found": len(search_result.get("final_relations", [])),
-        "valid_paths_count": sum(1 for p in search_result.get("final_paths", [])
-                                 if p.get("is_valid")),
+        "valid_paths_count": len(search_result.get("final_paths", [])),
         "entities_after_truncation": len(truncation_result.get("filtered_entities", [])),
         "relations_after_truncation": len(truncation_result.get("filtered_relations", [])),
         "merged_chunks_count": len(merged_chunks),
@@ -5724,7 +5737,7 @@ async def naive_query(
     reference_list_str = "\n".join(
         f"[{ref['reference_id']}] {ref['file_path']}"
         for ref in reference_list
-        if ref["reference_id"]
+        if ref['reference_id']
     )
 
     naive_context_template = PROMPTS["naive_query_context"]
