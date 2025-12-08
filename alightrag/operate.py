@@ -4653,7 +4653,7 @@ async def _alightrag_build_query_context(
 
         # Phase 1: Retrieval
         logger.info("[AlightRAG] Retrieval started")
-        search_result = await _perform_kg_search(
+        iteration_search_result = await _perform_kg_search(
             retrieval_query,
             ll_keywords,
             hl_keywords,
@@ -4665,14 +4665,44 @@ async def _alightrag_build_query_context(
             chunks_vdb,
         )
 
-        logger.info(f"[AlightRAG] Retrieval completed: {len(search_result['final_entities'])} entities, "
-                     f"{len(search_result['final_relations'])} relations")
+        logger.info(f"[AlightRAG] Retrieval completed: {len(iteration_search_result['final_entities'])} entities, "
+                     f"{len(iteration_search_result['final_relations'])} relations")
 
         # Store original data before filtering
-        search_result["original_entities"] = search_result["final_entities"][:] if search_result[
+        iteration_search_result["original_entities"] = iteration_search_result["final_entities"][:] if iteration_search_result[
             "final_entities"] else []
-        search_result["original_relations"] = search_result["final_relations"][:] if search_result[
+        iteration_search_result["original_relations"] = iteration_search_result["final_relations"][:] if iteration_search_result[
             "final_relations"] else []
+
+        # Combine entities from this iteration with accumulated ones
+        seen_entities = set()
+        combined_entities = []
+        for entity in iteration_search_result["final_entities"] + search_result["final_entities"]:
+            entity_name = entity.get("entity_name")
+            if entity_name and entity_name not in seen_entities:
+                combined_entities.append(entity)
+                seen_entities.add(entity_name)
+        # Combine relations from this iteration with accumulated ones
+        seen_relations = set()
+        combined_relations = []
+        for rel in iteration_search_result["final_relations"] + search_result["final_relations"]:
+            rel_key = (rel.get("src_id"), rel.get("tgt_id"))
+            if rel_key not in seen_relations:
+                combined_relations.append(rel)
+                seen_relations.add(rel_key)
+
+        # Update search_result with UNION of all entities/relations
+        search_result["final_entities"] = combined_entities
+        search_result["final_relations"] = combined_relations
+
+        # TODO
+        search_result["vector_chunks"] = iteration_search_result.get("vector_chunks", [])
+        search_result["chunk_tracking"].update(iteration_search_result.get("chunk_tracking", {}))
+        search_result["query_embedding"] = iteration_search_result.get("query_embedding")
+
+        # # Store this entities/relations of this iteration for tracking
+        search_result[f"iteration_{current_iteration}_entities"] = iteration_search_result["final_entities"]
+        search_result[f"iteration_{current_iteration}_relations"] = iteration_search_result["final_relations"]
 
         # Format entities and relationships for prompts
         entities_str, relations_str = format_for_prompts(
@@ -4766,11 +4796,11 @@ async def _alightrag_build_query_context(
         filtered_relations = validation_result.get("filtered_relationships", "")
 
         # Convert comma-separated strings back to lists
-        search_result["final_entities"] = [e.strip() for e in filtered_entities.split(",")
+        iteration_search_result["final_entities"] = [e.strip() for e in filtered_entities.split(",")
                                            if e.strip()] if filtered_entities else []
 
         # Parse relationship triples - these are now in the format (src_name, rel_text, tgt_name)
-        search_result["final_relations"] = []
+        iteration_search_result["final_relations"] = []
         if filtered_relations:
             for triple_str in filtered_relations.split(";"):
                 triple_str = triple_str.strip()
@@ -4778,27 +4808,41 @@ async def _alightrag_build_query_context(
                     triple_str = triple_str[1:-1]  # Remove parentheses
                     parts = [p.strip() for p in triple_str.split(",")]
                     if len(parts) == 3:
-                        search_result["final_relations"].append(tuple(parts))
+                        iteration_search_result["final_relations"].append(tuple(parts))
 
-        # search_result["final_paths"] = validation_result.get("validated_paths", [])
+        # Update search_result with filtered data
+        search_result["final_entities"] = list(set(iteration_search_result["final_relations"]))
+        search_result["final_relations"] = list(set(iteration_search_result["final_entities"]))
 
+        # non-path filtering
+        # iteration_search_result["final_paths"] = validation_result.get("validated_paths", [])
+
+        # path fitering
         # Get all validated paths from reflection
         validated_paths = validation_result.get("validated_paths", [])
 
         # Filter to keep only valid paths
-        valid_paths = []
+        valid_paths_this_iteration = []
         for path_info in validated_paths:
             if path_info.get("is_valid", False):
-                valid_paths.append(path_info)
+                # valid_paths_this_iteration.append(path_info)
+                # Add iteration info to path for tracking
+                path_info_with_iteration = path_info.copy()
+                path_info_with_iteration["iteration"] = current_iteration
+                valid_paths_this_iteration.append(path_info_with_iteration)
             else:
-                logger.info(
-                    f"[AlightRAG] Discarding invalid path: {path_info.get('path')} - Reason: {path_info.get('reason', 'No reason provided')}")
+                logger.info(f"[AlightRAG] Discarding invalid path: {path_info.get('path')} - Reason: {path_info.get('reason', 'No reason provided')}")
 
         # Store only valid paths
-        search_result["final_paths"] = valid_paths
+        iteration_search_result["final_paths"] = valid_paths_this_iteration
+
+        # UNION: Add this iteration's valid paths to accumulated paths
+        search_result["final_paths"].extend(valid_paths_this_iteration)
 
         # Log the filtering result
-        logger.info(f"[AlightRAG] Path filtering: {len(valid_paths)}/{len(validated_paths)} paths are valid")
+        logger.info(f"[AlightRAG] Iteration {current_iteration}: Found {len(validated_paths)} valid paths")
+        logger.info(f"[AlightRAG] After path filtering: {len(valid_paths_this_iteration)}/{len(validated_paths)} paths are valid")
+        logger.info(f"[AlightRAG] Total accumulated paths: {len(search_result['final_paths'])}")
 
         # Check if we should continue iterating
         supplementary_questions = validation_result.get("supplementary_questions", [])
@@ -4810,10 +4854,15 @@ async def _alightrag_build_query_context(
         elif supplementary_questions and current_iteration < max_iterations:
             # Use first supplementary question for next iteration
             retrieval_query = supplementary_questions[0]
-            logger.info(f"[AlightRAG] Continuing with supplementary question: {retrieval_query}")
+            logger.info(f"[AlightRAG] Continuing to iteration {current_iteration + 1} with supplementary question: {retrieval_query}")
         else:
-            logger.info("[AlightRAG] Maximum iterations reached or no supplementary questions")
+            logger.info(f"[AlightRAG] Maximum iterations reached or no supplementary questions after {current_iteration} iterations")
             break
+
+    # After all iterations, log summary
+    logger.info(f"[AlightRAG] Final summary: {len(search_result['final_entities'])} total entities, "
+               f"{len(search_result['final_relations'])} accumulated relations, "
+               f"{len(search_result['final_paths'])} accumulated valid paths over {current_iteration} iterations")
 
     # After iteration completes (or breaks early), proceed with remaining stages
     # Check if we have any data to process

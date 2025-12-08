@@ -616,116 +616,140 @@ Question: {question}
 """
 
 PROMPTS["alightrag_response"] = """
-You are an expert in knowledge graph question answering. Your task is to synthesize a final, comprehensive response to a given question using ONLY the provided entities, relationships, and validated relation paths from the knowledge graph. Do not introduce external knowledge, assumptions, or inferences—stick strictly to the given data.
+You are an expert in knowledge graph question answering. Your task is to synthesize a final, comprehensive response to a given question using ONLY the provided entities, relationships, validated relation paths from the knowledge graph and document chunks. Do not introduce external knowledge, assumptions, or inferences—stick strictly to the given data.
 
 ### Key Instructions:
-- Analyze the question to determine its intent (e.g., who, what, where, why, how).
-- Use the provided entities (comma-separated list of entity_names in title case) and relationships (list of triples as "(source_entity, relationship_keywords, target_entity)" separated by semicolons) as the sole knowledge base.
-- Leverage the validated paths (array of strings in "entity -> relationship -> entity -> ..." format) to derive the answer. Each path represents a logical chain leading to an answer entity.
-  - If multiple paths exist, integrate them coherently (e.g., list multiple answers if applicable).
-  - If no valid paths are provided, state that insufficient information is available to answer.
-- Ground every claim in the response directly in one or more paths, entities, or relationships. Explain briefly how the paths support the answer without inventing details.
-- Keep the response concise, objective, and in third-person. Use the same language as the question unless specified otherwise.
-- If the question cannot be fully answered based on the data, acknowledge limitations honestly.
+1. Analyze the question to determine its intent (e.g., who, what, where, why, how).
+2. Use the provided entities, relationships, validated paths, and document chunks as the sole knowledge base.
+3. Leverage the validated paths to derive the answer:
+   - If multiple paths exist, integrate them coherently
+   - If no valid paths are provided, state that insufficient information is available
+4. Ground every claim in the response directly in one or more paths, entities, relationships or document chunks
+5. Keep the response concise, objective, and in third-person
+6. If the question cannot be fully answered based on the data, acknowledge limitations honestly
+7. Track the reference_id of the document chunks which directly support the facts presented
+8. Generate a references section at the end of the response using the Reference Document List
+9. Do not generate anything after the reference section
 
 ### Output Format:
-Output your response in the following strict Markdown format for clarity:
+Your response MUST follow this exact structure:
+
 # Answer
 [Direct, concise answer to the question.]
 
 ## Reasoning Paths
-- Path 1: [Copy the first path]  
-  Explanation: [Briefly explain how this path derives the answer, referencing entities and relationships.]
+- Path 1: [Copy the first path exactly as provided]  
+  Explanation: [Briefly explain how this path derives the answer, referencing specific entities, relationships, and document chunks when applicable.]
 - Path 2: [If applicable, copy the second path]  
   Explanation: [Brief explanation.]
+- [Continue for additional paths]
 
-## Supporting Details
-- [Bullet points with additional context from entities/relationships, if needed to elaborate without redundancy.]
+### References
+[Format each reference on its own line as shown below, using the Reference Document List provided]
 
-Do not add any other sections or text outside this format.
+### Reference Format Rules:
+1. Use heading: `### References` (exactly three hash symbols)
+2. Each reference must be in the format: `* [n] Document Title: Additional context details`
+   - Replace `n` with the reference number from the Reference Document List
+   - `Document Title` must match exactly from the Reference Document List
+   - Add a colon and brief context details about how this document supports the answer
+3. Include only references that directly support facts in your answer
+4. Maximum 5 references
+5. Do not include any footnotes, summaries, or explanations after the references
 
 ### Few-Shot Examples:
 
 Example 1:
+Question: Who is the director of Inception?
 Entities: Inception, Christopher Nolan, Film
 Relationships: (Inception, directed by, Christopher Nolan); (Inception, is a, Film)
 Validated Paths: ["Inception -> directed by -> Christopher Nolan"]
-Question: Who is the director of Inception?
+Document Chunks: [{"reference_id": "1", "content": "The film Inception was directed by Christopher Nolan..."}]
+Reference Document List: [1] film_database.txt
 Output:
 # Answer
 Christopher Nolan.
 
 ## Reasoning Paths
 - Path 1: Inception -> directed by -> Christopher Nolan  
-  Explanation: This path starts with the film Inception and directly links to its director via the 'directed by' relationship, identifying Christopher Nolan as the answer entity.
+  Explanation: This path starts with the film Inception and directly links to its director via the 'directed by' relationship, identifying Christopher Nolan as the answer entity. Supported by document [1].
 
-## Supporting Details
-- Inception is classified as a Film in the knowledge graph.
+### References
+* [1] film_database.txt: Provides details about the film Inception and its director Christopher Nolan.
 
 Example 2:
+Question: What is the capital of the country where the Eiffel Tower is located?
 Entities: Eiffel Tower, Paris, France
 Relationships: (Eiffel Tower, located in, Paris); (Paris, is capital of, France)
 Validated Paths: ["Eiffel Tower -> located in -> Paris", "Eiffel Tower -> located in -> Paris -> is capital of -> France"]
-Question: What is the capital of the country where the Eiffel Tower is located?
+Document Chunks: [{"reference_id": "2", "content": "The Eiffel Tower is located in Paris, France..."}, {"reference_id": "3", "content": "Paris serves as the capital city of France..."}]
+Reference Document List: [2] geography_guide.txt; [3] capitals_database.txt
 Output:
 # Answer
 Paris.
 
 ## Reasoning Paths
 - Path 1: Eiffel Tower -> located in -> Paris  
-  Explanation: This path locates the Eiffel Tower in Paris, which serves as the capital city answering the question.
+  Explanation: This path locates the Eiffel Tower in Paris, which serves as the capital city answering the question. Supported by document [2].
 - Path 2: Eiffel Tower -> located in -> Paris -> is capital of -> France  
-  Explanation: This extended path confirms Paris as the capital of France, providing context for the country.
+  Explanation: This extended path confirms Paris as the capital of France, providing additional context. Supported by documents [2] and [3].
 
-## Supporting Details
-- Paris is connected as the capital of France.
+### References
+* [2] geography_guide.txt: Documents the location of the Eiffel Tower in Paris.
+* [3] capitals_database.txt: Confirms Paris as the capital of France.
 
 Example 3:
+Question: Who won the Nobel Prize in Physics in 2020?
 Entities: Roger Penrose, Reinhard Genzel, Andrea Ghez, Nobel Prize in Physics, 2020
 Relationships: (Nobel Prize in Physics, awarded in, 2020); (Nobel Prize in Physics, won by, Roger Penrose); (Nobel Prize in Physics, won by, Reinhard Genzel); (Nobel Prize in Physics, won by, Andrea Ghez)
 Validated Paths: ["Nobel Prize in Physics -> won by -> Roger Penrose", "Nobel Prize in Physics -> won by -> Reinhard Genzel", "Nobel Prize in Physics -> won by -> Andrea Ghez"]
-Question: Who won the Nobel Prize in Physics in 2020?
+Document Chunks: [{"reference_id": "4", "content": "The 2020 Nobel Prize in Physics was awarded jointly to Roger Penrose, Reinhard Genzel, and Andrea Ghez..."}]
+Reference Document List: [4] nobel_prize_records.txt
 Output:
 # Answer
 Roger Penrose, Reinhard Genzel, and Andrea Ghez (co-winners).
 
 ## Reasoning Paths
 - Path 1: Nobel Prize in Physics -> won by -> Roger Penrose  
-  Explanation: This path links the prize to Roger Penrose as a winner via the 'won by' relationship.
+  Explanation: This path links the prize to Roger Penrose as a winner via the 'won by' relationship. Supported by document [4].
 - Path 2: Nobel Prize in Physics -> won by -> Reinhard Genzel  
-  Explanation: This path identifies Reinhard Genzel as another winner.
+  Explanation: This path identifies Reinhard Genzel as another winner. Supported by document [4].
 - Path 3: Nobel Prize in Physics -> won by -> Andrea Ghez  
-  Explanation: This path identifies Andrea Ghez as the third winner.
+  Explanation: This path identifies Andrea Ghez as the third winner. Supported by document [4].
 
-## Supporting Details
-- The Nobel Prize in Physics was awarded in 2020, as per the relationships.
+### References
+* [4] nobel_prize_records.txt: Documents the 2020 Nobel Prize in Physics winners and award details.
 """
 
-
 PROMPTS["alightrag_response_query"] = """
-Now, construct the response for the following:
+Now, construct the response for the following. Use ONLY the data provided below:
+
 Entities:
 ```json
 {entities_str}
 ```
+
 Relationships:
 ```json
 {relations_str}
 ```
+
 Validated Paths:
 ```json
 {paths_str}
 ```
+
 Document Chunks (Each entry has a reference_id refer to the `Reference Document List`):
 ```json
 {text_chunks_str}
 ```
+
 Reference Document List (Each entry starts with a [reference_id] that corresponds to entries in the Document Chunks):
 ```
 {reference_list_str}
 ```
-Question:
- {question}
+
+Question: {question}
 """
 
 # Now, construct the response for the following:

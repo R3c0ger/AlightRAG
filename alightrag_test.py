@@ -105,7 +105,12 @@ async def main():
         files_to_delete = [
             "graph_chunk_entity_relation.graphml",
             "kv_store_doc_status.json",
+            "kv_store_entity_chunks.json",
             "kv_store_full_docs.json",
+            "kv_store_full_entities.json",
+            "kv_store_full_relations.json",
+            "kv_store_llm_response_cache.json",
+            "kv_store_relation_chunks.json",
             "kv_store_text_chunks.json",
             "vdb_chunks.json",
             "vdb_entities.json",
