@@ -171,17 +171,17 @@ async def main():
         #         param=QueryParam(mode="global"),
         #     )
         # )
-        #
-        # # Perform hybrid search
-        # print("\n=====================")
-        # print("Query mode: hybrid")
-        # print("=====================")
-        # print(
-        #     await rag.aquery(
-        #         "What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?",
-        #         param=QueryParam(mode="hybrid"),
-        #     )
-        # )
+
+        # Perform hybrid search
+        print("\n=====================")
+        print("Query mode: hybrid")
+        print("=====================")
+        print(
+            await rag.aquery(
+                "What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?",
+                param=QueryParam(mode="hybrid"),
+            )
+        )
 
         # alightrag-insert TODO
         # Perform alightrag search

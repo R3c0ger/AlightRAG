@@ -4140,16 +4140,16 @@ async def _alightrag_build_context_str(
 
     # Get the system prompt template from PROMPTS or global_config
     sys_prompt_template = global_config.get(
-        "system_prompt_template", PROMPTS["rag_response"]
+        "system_prompt_template", PROMPTS["alightrag_response"]
     )
 
     kg_context_template = PROMPTS["alightrag_response_query"]
-    user_prompt = query_param.user_prompt if query_param.user_prompt else ""
-    response_type = (
-        query_param.response_type
-        if query_param.response_type
-        else "Multiple Paragraphs"
-    )
+    # user_prompt = query_param.user_prompt if query_param.user_prompt else ""
+    # response_type = (
+    #     query_param.response_type
+    #     if query_param.response_type
+    #     else "Multiple Paragraphs"
+    # )
 
     entities_str = "\n".join(
         json.dumps(entity, ensure_ascii=False) for entity in entities_context
@@ -4175,11 +4175,7 @@ async def _alightrag_build_context_str(
     kg_context_tokens = len(tokenizer.encode(pre_kg_context))
 
     # Calculate preliminary system prompt tokens
-    pre_sys_prompt = sys_prompt_template.format(
-        context_data="",  # Empty for overhead calculation
-        response_type=response_type,
-        user_prompt=user_prompt,
-    )
+    pre_sys_prompt = sys_prompt_template
     sys_prompt_tokens = len(tokenizer.encode(pre_sys_prompt))
 
     # Calculate available tokens for text chunks
@@ -4209,7 +4205,6 @@ async def _alightrag_build_context_str(
     )
 
     # Rebuild chunks_context with truncated chunks
-    # TODO 1208
     # -----------------------------------------------------------------------#
     # ADD DEBUG LOGGING
     logger.info(f"[DEBUG] entities_context sample: {entities_context[0] if entities_context else 'EMPTY'}")
@@ -4220,7 +4215,7 @@ async def _alightrag_build_context_str(
     chunks_context = []
     for i, chunk in enumerate(truncated_chunks):
         # SAFE ACCESS with .get() and fallback
-        ref_id = chunk.get("reference_id", "na")
+        ref_id = chunk.get("reference_id", "")
         if not ref_id:
             logger.warning(f"Chunk missing reference_id: {ref_id}")
         chunks_context.append({
@@ -4242,7 +4237,7 @@ async def _alightrag_build_context_str(
         json.dumps(text_unit, ensure_ascii=False) for text_unit in chunks_context
     )
     reference_list_str = "\n".join(
-        f"[{ref.get("reference_id","na")}] {ref.get('file_path')}"
+        f"[{ref.get("reference_id","")}] {ref.get('file_path')}"
         for ref in reference_list
         if ref.get("reference_id")
     )
@@ -4757,7 +4752,7 @@ async def _alightrag_build_query_context(
                 stream=query_param.stream,
             )
 
-            logger.info(f"[AlightRAG] reasoning_response ->: {reasoning_response}")
+            logger.info(f"[AlightRAG] reasoning_response -> {reasoning_response}")
 
             # Parse JSON response
             path_result = extract_json_from_response(reasoning_response)
@@ -4790,7 +4785,7 @@ async def _alightrag_build_query_context(
                 stream=query_param.stream,
             )
 
-            logger.info(f"[AlightRAG] reflection_response ->: {reflection_response}")
+            logger.info(f"[AlightRAG] reflection_response -> {reflection_response}")
 
             # Parse JSON response
             validation_result = extract_json_from_response(reflection_response)

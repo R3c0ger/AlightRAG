@@ -644,7 +644,7 @@ Your response MUST follow this exact structure:
   Explanation: [Brief explanation.]
 - [Continue for additional paths]
 
-### References
+### References [If there are no references, DON'T include this section]
 [Format each reference on its own line as shown below, using the Reference Document List provided]
 
 ### Reference Format Rules:
