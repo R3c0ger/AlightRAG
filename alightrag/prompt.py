@@ -436,7 +436,7 @@ You are an expert in knowledge graph reasoning. Your task is to analyze a given 
 - Ensure consistent entity naming (title case) and third-person objectivity.
 
 ### Output Format:
-Output your response in the following strict JSON format, with no additional text:
+Output your response in the following strict raw JSON format, with no additional text, do NOT wrap your response in code blocks (no ```json or ```):
 {
   "paths": [
     "Entity1",
@@ -510,7 +510,7 @@ You are an expert in knowledge graph validation. Your task is to evaluate one or
 - Finally, assess if the valid paths (if any), combined with the filtered entities and relationships, sufficiently answer the question. If not (e.g., no valid paths, partial coverage, or missing key details), raise 1-3 supplementary questions that could elicit additional entities/relationships needed to fully answer the original question.
 
 ### Output Format:
-Output your response in the following strict JSON format, with no additional text:
+Output your response in the following strict raw JSON format, with no additional text, do NOT wrap your response in code blocks (no ```json or ```):
 {
   "validated_paths": [
     {

@@ -4590,6 +4590,46 @@ async def _alightrag_build_query_context(
 
         return formatted_result
 
+    def extract_json_from_response(response_text: str) -> dict:
+        """
+        Extract JSON from a response that might be wrapped in Markdown code blocks.
+        """
+        if not isinstance(response_text, str):
+            return response_text
+
+        text = response_text.strip()
+
+        # If it's already valid JSON, parse it directly
+        if text.startswith('{') and text.endswith('}'):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass  # Continue to cleaning
+
+        # Try to extract JSON from code blocks
+        # Pattern: ```json ... ``` or ``` ... ```
+        import re
+
+        # Try to find JSON within code blocks
+        json_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+        match = re.search(json_pattern, text, re.IGNORECASE)
+
+        if match:
+            json_str = match.group(1).strip()
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"[AlightRAG] Failed to parse JSON from code block: {e}")
+                logger.error(f"[AlightRAG] Extracted content: {json_str[:200]}")
+
+        # If no code blocks found, try to parse the whole text
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.error(f"[AlightRAG] Failed to parse response as JSON: {e}")
+            logger.error(f"[AlightRAG] Response: {text[:500]}")
+            return {}
+
 
     # Stage 1: Pure search
     user_query = query
@@ -4666,10 +4706,9 @@ async def _alightrag_build_query_context(
             logger.info(f"[AlightRAG] reasoning_response ->: {reasoning_response}")
 
             # Parse JSON response
-            if isinstance(reasoning_response, str):
-                path_result = json.loads(reasoning_response)
-            else:
-                path_result = reasoning_response
+            path_result = extract_json_from_response(reasoning_response)
+            if not path_result:
+                path_result = {"paths": [], "explanation": "Reasoning failed"}
 
             logger.info(f"[AlightRAG] Reasoning completed: {len(path_result.get('paths', []))} paths found")
 
@@ -4682,7 +4721,7 @@ async def _alightrag_build_query_context(
         try:
             reflection_prompt = PROMPTS["alightrag_reflection"]
 
-            reflection_query = PROMPTS["alightrag_reflection"].format(
+            reflection_query = PROMPTS["alightrag_reflection_query"].format(
                 entities=entities_str,
                 relationships=relations_str,
                 paths=json.dumps(path_result.get("paths", [])),
@@ -4700,10 +4739,15 @@ async def _alightrag_build_query_context(
             logger.info(f"[AlightRAG] reflection_response ->: {reflection_response}")
 
             # Parse JSON response
-            if isinstance(reflection_response, str):
-                validation_result = json.loads(reflection_response)
-            else:
-                validation_result = reflection_response
+            validation_result = extract_json_from_response(reflection_response)
+            # Ensure required keys exist
+            if not validation_result:
+                validation_result = {
+                    "validated_paths": [],
+                    "filtered_entities": "",
+                    "filtered_relationships": "",
+                    "overall_explanation": "Failed to parse reflection response"
+                }
 
             logger.info(f"[AlightRAG] Reflection completed: "
                          f"{sum(1 for p in validation_result.get('validated_paths', []) if p.get('is_valid'))} valid paths")
@@ -4736,7 +4780,25 @@ async def _alightrag_build_query_context(
                     if len(parts) == 3:
                         search_result["final_relations"].append(tuple(parts))
 
-        search_result["final_paths"] = validation_result.get("validations", [])
+        # search_result["final_paths"] = validation_result.get("validated_paths", [])
+
+        # Get all validated paths from reflection
+        validated_paths = validation_result.get("validated_paths", [])
+
+        # Filter to keep only valid paths
+        valid_paths = []
+        for path_info in validated_paths:
+            if path_info.get("is_valid", False):
+                valid_paths.append(path_info)
+            else:
+                logger.info(
+                    f"[AlightRAG] Discarding invalid path: {path_info.get('path')} - Reason: {path_info.get('reason', 'No reason provided')}")
+
+        # Store only valid paths
+        search_result["final_paths"] = valid_paths
+
+        # Log the filtering result
+        logger.info(f"[AlightRAG] Path filtering: {len(valid_paths)}/{len(validated_paths)} paths are valid")
 
         # Check if we should continue iterating
         supplementary_questions = validation_result.get("supplementary_questions", [])
