@@ -4901,7 +4901,7 @@ async def _alightrag_build_query_context(
 
     # After iteration completes (or breaks early), proceed with remaining stages
     # Check if we have any data to process
-    if not search_result["final_entities"] or not search_result["final_relations"] or not search_result["final_paths"]:
+    if not search_result["final_entities"] and not search_result["final_relations"] and not search_result["final_paths"]:
         if query_param.mode != "mix":
             return None
         elif not search_result["chunk_tracking"]:
