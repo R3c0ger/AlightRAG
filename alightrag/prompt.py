@@ -507,7 +507,7 @@ You are an expert in knowledge graph validation. Your task is to evaluate one or
 - For multiple paths, output a list of validated paths (one per path).
 - Base validation solely on the provided entities and relationships—assume they are accurate extractions from the source text, not real-world facts.
 - After validation, filter the entities and relationships to retain only those that directly appear in the valid paths (if any). Entities: Collect unique entity_names (in title case) from all valid paths. Relationships: Collect unique triples (as "(source_entity, relationship_keywords, target_entity)") that match links in valid paths.
-- Finally, assess if the valid paths (if any), combined with the filtered entities and relationships, sufficiently answer the question. If not (e.g., no valid paths, partial coverage, or missing key details), raise 1-3 supplementary questions that could elicit additional entities/relationships needed to fully answer the original question.
+- Finally, assess if the valid paths (if any), combined with the filtered entities and relationships, sufficiently answer the question. If not (e.g., no valid paths, partial coverage, or missing key details), you must raise 1-3 supplementary questions that could elicit additional entities/relationships needed to fully answer the original question.
 
 ### Output Format:
 Output your response in the following strict raw JSON format, with no additional text, do NOT wrap your response in code blocks (no ```json or ```):

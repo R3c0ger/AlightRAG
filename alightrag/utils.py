@@ -3205,14 +3205,14 @@ def alightrag_convert_to_user_format(
     formatted_chunks = []
     for i, chunk in enumerate(chunks):
         chunk_data = {
-            "reference_id": chunk.get("reference_id", ""),
-            "content": chunk.get("content", ""),
-            "file_path": chunk.get("file_path", "unknown_source"),
-            "chunk_id": chunk.get("chunk_id", ""),
+            "reference_id": chunk.get("reference_id", "na"),
+            "content": chunk.get("content", "na"),
+            "file_path": chunk.get("file_path", "na"),
+            "chunk_id": chunk.get("chunk_id", "na"),
         }
         formatted_chunks.append(chunk_data)
 
-    logger.debug(
+    logger.info(
         f"[convert_to_user_format] Formatted {len(formatted_entities)} entities, "
         f"{len(formatted_relationships)} relationships, "
         f"{len(formatted_paths)} paths, "  # NEW: Log paths count
@@ -3298,7 +3298,7 @@ def generate_reference_list_from_chunks(
         if file_path and file_path != "unknown_source":
             chunk_copy["reference_id"] = file_path_to_ref_id[file_path]
         else:
-            chunk_copy["reference_id"] = ""
+            chunk_copy["reference_id"] = "na"
         updated_chunks.append(chunk_copy)
 
     # 5. Build reference_list
