@@ -635,7 +635,7 @@ You are an expert in knowledge graph question answering. Your task is to synthes
 Your response MUST follow this exact structure:
 
 # Answer
-[Direct, concise answer to the question.]
+[Direct, concise answer to the question, followed by detailed reasoning steps based on the reasoning paths]
 
 ## Reasoning Paths
 - Path 1: [Copy the first path exactly as provided]  
@@ -719,6 +719,204 @@ Roger Penrose, Reinhard Genzel, and Andrea Ghez (co-winners).
 
 ### References
 * [4] nobel_prize_records.txt: Documents the 2020 Nobel Prize in Physics winners and award details.
+"""
+
+PROMPTS["alightrag_response"] = """
+You are an expert in knowledge graph question answering. Your task is to synthesize a detailed, comprehensive response to a given question using ONLY the provided entities, relationships, validated relation paths from the knowledge graph and document chunks. Do not introduce external knowledge, assumptions, or inferences—stick strictly to the given data.
+
+### Key Instructions:
+1. Analyze the question to determine its intent (e.g., who, what, where, why, how).
+2. Use the provided entities, relationships, validated paths, and document chunks as the sole knowledge base.
+3. Leverage the validated paths to derive the answer:
+   - Analyze how each path connects entities through relationships to answer the question
+   - If multiple paths exist, explain how they collectively provide a complete answer
+   - If paths provide alternative explanations, discuss the possibilities
+   - If no valid paths are provided, state that insufficient information is available
+4. Ground every claim in the response directly in one or more paths, entities, relationships or document chunks
+5. Provide detailed, step-by-step reasoning that traces through the paths
+6. If the question cannot be fully answered based on the data, acknowledge limitations honestly
+7. Track the reference_id of the document chunks which directly support the facts presented
+8. Generate a references section at the end of the response using the Reference Document List
+9. Do not generate anything after the reference section
+
+### Output Format:
+Your response MUST follow this exact structure:
+
+# Answer
+[Direct, concise answer to the question]
+
+# Detailed Reasoning
+
+[Provide comprehensive, step-by-step reasoning that explains:
+1. How the reasoning paths connect to answer the question
+2. The logical flow from starting entities to answer entities
+3. How different paths complement or reinforce each other
+4. Any patterns or insights revealed by the path analysis
+5. How document chunks provide supporting evidence
+]
+
+# Reasoning Path Analysis
+
+## Path 1: [Copy the first path exactly as provided]
+**Step-by-Step Explanation:**
+1. [First hop explanation: How the starting entity relates to the next entity]
+2. [Second hop explanation: How the middle entity connects to the next]
+3. [Final hop explanation: How this leads to the answer]
+**Supporting Evidence:** [Reference specific entities, relationships, and document chunks that validate this path]
+
+## Path 2: [If applicable, copy the second path]
+**Step-by-Step Explanation:**
+1. [First hop explanation]
+2. [Second hop explanation]
+3. [Final hop explanation]
+**Supporting Evidence:** [Reference specific entities, relationships, and document chunks]
+
+[Continue this pattern for additional paths]
+
+## Path Integration Summary
+
+[Explain how all valid paths collectively answer the question. Discuss:
+- How different paths may provide complementary information
+- Whether paths converge on the same answer or provide alternatives
+- The strength of evidence based on path validity and supporting documents
+]
+
+# References
+[Format each reference on its own line as shown below, using the Reference Document List provided]
+
+### Reference Format Rules:
+1. Use heading: `### References` (exactly three hash symbols)
+2. Each reference must be in the format: `* [n] Document Title: Additional context details`
+   - Replace `n` with the reference number from the Reference Document List
+   - `Document Title` must match exactly from the Reference Document List
+   - Add a colon and brief context details about how this document supports specific parts of the answer
+3. Include only references that directly support facts in your answer
+4. Maximum 5 references
+5. Do not include any footnotes, summaries, or explanations after the references
+
+### Few-Shot Examples:
+
+Example 1:
+Entities: Inception, Christopher Nolan, Film
+Relationships: (Inception, directed by, Christopher Nolan); (Inception, is a, Film)
+Validated Paths: ["Inception -> directed by -> Christopher Nolan"]
+Document Chunks: [{"reference_id": "1", "content": "The film Inception was directed by Christopher Nolan, who conceived the idea while working on previous films..."}]
+Reference Document List: [1] film_database.txt
+Question: Who is the director of Inception?
+
+Output:
+# Answer
+Christopher Nolan.
+
+# Detailed Reasoning
+
+The question asks for the director of the film Inception. The knowledge graph contains a direct relationship showing that Inception is connected to Christopher Nolan via a "directed by" relationship. This single-hop path provides a clear, unambiguous answer.
+
+# Reasoning Path Analysis
+
+## Path 1: Inception -> directed by -> Christopher Nolan
+**Step-by-Step Explanation:**
+1. **Starting Point:** The entity "Inception" represents the film in question
+2. **Relationship:** The "directed by" relationship indicates creative leadership
+3. **End Point:** The entity "Christopher Nolan" is identified as the director
+**Supporting Evidence:** The relationship triple (Inception, directed by, Christopher Nolan) directly answers the question. Document [1] provides additional context about Nolan's role as director.
+
+## Path Integration Summary
+
+Only one valid path exists, which provides a direct and complete answer. The path is simple (single-hop) but sufficient to answer the question definitively.
+
+# References
+* [1] film_database.txt: Confirms Christopher Nolan directed Inception and provides background on his involvement.
+
+Example 2:
+Entities: Eiffel Tower, Paris, France
+Relationships: (Eiffel Tower, located in, Paris); (Paris, is capital of, France)
+Validated Paths: ["Eiffel Tower -> located in -> Paris", "Eiffel Tower -> located in -> Paris -> is capital of -> France"]
+Document Chunks: [{"reference_id": "2", "content": "The Eiffel Tower, completed in 1889, is located in the Champ de Mars in Paris, France..."}, {"reference_id": "3", "content": "Paris has served as the capital of France since 508 AD and is the country's political and cultural center..."}]
+Reference Document List: [2] geography_guide.txt; [3] capitals_database.txt
+Question: What is the capital of the country where the Eiffel Tower is located?
+
+Output:
+# Answer
+Paris.
+
+# Detailed Reasoning
+
+This two-hop question requires finding: (1) where the Eiffel Tower is located, then (2) the capital of that country. Two valid paths provide the answer through different reasoning approaches.
+
+# Reasoning Path Analysis
+
+## Path 1: Eiffel Tower -> located in -> Paris
+**Step-by-Step Explanation:**
+1. **Starting Point:** The Eiffel Tower landmark entity
+2. **First Hop:** The "located in" relationship connects it to Paris
+3. **Inference:** Since Paris is a capital city, the path ends here with the answer
+**Supporting Evidence:** Relationship (Eiffel Tower, located in, Paris) and document [2] which confirms the Eiffel Tower's location in Paris.
+
+## Path 2: Eiffel Tower -> located in -> Paris -> is capital of -> France
+**Step-by-Step Explanation:**
+1. **Starting Point:** The Eiffel Tower landmark entity
+2. **First Hop:** Located in Paris via "located in" relationship
+3. **Second Hop:** Paris is capital of France via "is capital of" relationship
+4. **Inference:** The path confirms Paris as both the city containing the Eiffel Tower and the capital of France
+**Supporting Evidence:** Both relationship triples are present, and documents [2] and [3] provide supporting geographic and political context.
+
+## Path Integration Summary
+
+Both paths converge on the same answer (Paris) but through different reasoning:
+- Path 1 provides a direct answer by recognizing Paris as a capital city
+- Path 2 provides additional confirmation by explicitly stating Paris's capital status
+The presence of multiple converging paths strengthens the confidence in the answer.
+
+# References
+* [2] geography_guide.txt: Documents the precise location of the Eiffel Tower in Paris, France.
+* [3] capitals_database.txt: Confirms Paris's status as the capital of France with historical context.
+
+Example 3:
+Entities: Roger Penrose, Reinhard Genzel, Andrea Ghez, Nobel Prize in Physics, 2020
+Relationships: (Nobel Prize in Physics, awarded in, 2020); (Nobel Prize in Physics, won by, Roger Penrose); (Nobel Prize in Physics, won by, Reinhard Genzel); (Nobel Prize in Physics, won by, Andrea Ghez)
+Validated Paths: ["Nobel Prize in Physics -> won by -> Roger Penrose", "Nobel Prize in Physics -> won by -> Reinhard Genzel", "Nobel Prize in Physics -> won by -> Andrea Ghez"]
+Document Chunks: [{"reference_id": "4", "content": "The 2020 Nobel Prize in Physics was awarded jointly to three scientists: Roger Penrose for theoretical work on black holes, Reinhard Genzel for galactic center research, and Andrea Ghez for stellar orbit observations..."}]
+Reference Document List: [4] nobel_prize_records.txt
+Question: Who won the Nobel Prize in Physics in 2020?
+
+Output:
+# Answer
+Roger Penrose, Reinhard Genzel, and Andrea Ghez (co-winners of the 2020 Nobel Prize in Physics).
+
+# Detailed Reasoning
+
+The question requires identifying all winners of a specific award in a specific year. Three parallel paths exist, each connecting the Nobel Prize in Physics entity to a different winner.
+
+# Reasoning Path Analysis
+
+## Path 1: Nobel Prize in Physics -> won by -> Roger Penrose
+**Step-by-Step Explanation:**
+1. **Starting Point:** The Nobel Prize in Physics award entity
+2. **Relationship:** Connected to Roger Penrose via "won by" relationship
+3. **Temporal Context:** The separate relationship (Nobel Prize in Physics, awarded in, 2020) establishes the year
+**Supporting Evidence:** Relationship triple and document [4] which lists all winners.
+
+## Path 2: Nobel Prize in Physics -> won by -> Reinhard Genzel
+**Step-by-Step Explanation:**
+1. **Same Starting Point:** Nobel Prize in Physics
+2. **Parallel Relationship:** Connected to a different winner, Reinhard Genzel
+3. **Collective Answer:** This path contributes another co-winner to the complete answer
+**Supporting Evidence:** Relationship triple and document [4].
+
+## Path 3: Nobel Prize in Physics -> won by -> Andrea Ghez
+**Step-by-Step Explanation:**
+1. **Same Starting Point:** Nobel Prize in Physics
+2. **Third Winner:** Connected to Andrea Ghez
+3. **Complete Set:** This completes the list of three co-winners
+**Supporting Evidence:** Relationship triple and document [4].
+
+## Path Integration Summary
+
+The three parallel paths collectively identify all co-winners. Each path independently identifies one winner, and together they provide the complete answer. The temporal relationship establishes the specific year (2020), making the answer precise.
+
+# References
+* [4] nobel_prize_records.txt: Provides comprehensive details about the 2020 Nobel Prize in Physics, including all winners and their contributions.
 """
 
 PROMPTS["alightrag_response_query"] = """

@@ -3105,12 +3105,13 @@ async def kg_query(
     # Build system prompt
     # alightrag-insert TODO
     if query_param.mode == "alightrag":
-        sys_prompt_temp = PROMPTS["alightrag_response"]
-        sys_prompt = sys_prompt_temp.format(
-            response_type=response_type,
-            # user_prompt=user_prompt,
-            # context_data=context_result.context,
-        )
+        sys_prompt = PROMPTS["alightrag_response"]
+        # sys_prompt_temp = PROMPTS["alightrag_response"]
+        # sys_prompt = sys_prompt_temp.format(
+        #     # response_type=response_type,
+        #     # user_prompt=user_prompt,
+        #     # context_data=context_result.context,
+        # )
     else:
         sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
         sys_prompt = sys_prompt_temp.format(
@@ -4331,7 +4332,11 @@ async def _alightrag_build_context_str(
     )
 
     logger.info(
-        f"[_alightrag_build_context_str] Final data after conversion: {len(final_data.get('entities', []))} entities, {len(final_data.get('relationships', []))} relationships, {len(final_data.get('paths', []))} paths, {len(final_data.get('chunks', []))} chunks"
+        f"[_alightrag_build_context_str] Final data after conversion: "
+        f"{len(final_data.get('data', {}).get('entities', []))} entities, "
+        f"{len(final_data.get('data', {}).get('relationships', []))} relationships, "
+        f"{len(final_data.get('data', {}).get('paths', []))} paths, "
+        f"{len(final_data.get('data', {}).get('chunks', []))} chunks"
     )
     return result, final_data # prompt-templated context, detailed/formatted data
 
@@ -4974,6 +4979,9 @@ async def _alightrag_build_query_context(
         "final_chunks_count": len(raw_data.get("data", {}).get("chunks", [])),
     }
 
+    logger.info(
+        f"[AlightRAG] Final context: {context}, "
+    )
     logger.info(
         f"[AlightRAG] Final context length: {len(context) if context else 0}, "
     )

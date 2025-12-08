@@ -3206,14 +3206,14 @@ def alightrag_convert_to_user_format(
     for i, chunk in enumerate(chunks):
         chunk_data = {
             "reference_id": chunk.get("reference_id", "na"),
-            "content": chunk.get("content", "na"),
-            "file_path": chunk.get("file_path", "na"),
-            "chunk_id": chunk.get("chunk_id", "na"),
+            "content": chunk.get("content", ""),
+            "file_path": chunk.get("file_path", "unknown_source"),
+            "chunk_id": chunk.get("chunk_id", ""),
         }
         formatted_chunks.append(chunk_data)
 
     logger.info(
-        f"[convert_to_user_format] Formatted {len(formatted_entities)} entities, "
+        f"[alightrag_convert_to_user_format] Formatted {len(formatted_entities)} entities, "
         f"{len(formatted_relationships)} relationships, "
         f"{len(formatted_paths)} paths, "  # NEW: Log paths count
         f"{len(formatted_chunks)} chunks"
@@ -3267,7 +3267,7 @@ def generate_reference_list_from_chunks(
     # 1. Extract all valid file_paths and count their occurrences
     file_path_counts = {}
     for chunk in chunks:
-        file_path = chunk.get("file_path", "")
+        file_path = chunk.get("file_path", "unknown_source")
         if file_path and file_path != "unknown_source":
             file_path_counts[file_path] = file_path_counts.get(file_path, 0) + 1
 
@@ -3276,7 +3276,7 @@ def generate_reference_list_from_chunks(
     file_path_with_indices = []
     seen_paths = set()
     for i, chunk in enumerate(chunks):
-        file_path = chunk.get("file_path", "")
+        file_path = chunk.get("file_path", "unknown_source")
         if file_path and file_path != "unknown_source" and file_path not in seen_paths:
             file_path_with_indices.append((file_path, file_path_counts[file_path], i))
             seen_paths.add(file_path)
@@ -3294,7 +3294,7 @@ def generate_reference_list_from_chunks(
     updated_chunks = []
     for chunk in chunks:
         chunk_copy = chunk.copy()
-        file_path = chunk_copy.get("file_path", "")
+        file_path = chunk_copy.get("file_path", "unknown_source")
         if file_path and file_path != "unknown_source":
             chunk_copy["reference_id"] = file_path_to_ref_id[file_path]
         else:
