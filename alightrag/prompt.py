@@ -628,7 +628,8 @@ You are an expert in knowledge graph question answering. Your task is to synthes
 5. Keep the response concise, objective, and in third-person
 6. If the question cannot be fully answered based on the data, acknowledge limitations honestly
 7. Track the reference_id of the document chunks which directly support the facts presented
-8. Generate a references section at the end of the response using the Reference Document List
+8. Generate a References section at the end of the response using the Reference Document List
+9. Don't generate a References section if the Reference Document List is empty
 9. Do not generate anything after the reference section
 
 ### Output Format:
@@ -644,7 +645,7 @@ Your response MUST follow this exact structure:
   Explanation: [Brief explanation.]
 - [Continue for additional paths]
 
-### References [If there are no references, DON'T include this section]
+### References
 [Format each reference on its own line as shown below, using the Reference Document List provided]
 
 ### Reference Format Rules:
