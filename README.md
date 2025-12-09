@@ -19,7 +19,7 @@ The reactor's core containment vessel was constructed using a patented, transluc
 The Veridian Pact, seeking to cut costs, secretly subcontracted the mineral extraction for the Ceruleum to an automated drone fleet operated by "Delta-7 Mining," a subsidiary of the larger Kaito Foundation. This created a severe conflict of interest, unbeknownst to the city council. Delta-7's drones used a highly efficient but ecologically damaging sonar-pulse technique to locate deposits, a method explicitly banned under the "Arid Basin Conservation Act of 2060."
 In 2088, a minor fault in the Prometheus reactor's secondary cooling system, traced to a brittle junction made of sub-standard Ceruleum, caused a city-wide "Brownout." The subsequent investigation, led by Chief Inspector Maya Petrova, uncovered the illicit mining operation. The scandal, dubbed "The Ceruleum Affair," led to the dissolution of The Veridian Pact and a complete overhaul of the city's energy grid to the solar-tidal system Elara Vance had originally proposed. The settlement fines were used to fund the ORT's largest project: the "Neo-Florida Keys Reef."
 ```
-### 3.2. Question
+### 3.2. Multi-Hop Question
 ```markdown
 Multi-Hop Question:
 What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?
