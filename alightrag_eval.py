@@ -26,7 +26,9 @@ async def eval_alight(data: DatasetLoader):
     queries = data.queries
     answers = data.answers
 
-    results = []
+    result_file = os.path.join(WORKING_DIR, "eval_results.jsonl")
+    with open(result_file, 'w', encoding='utf-8') as f:
+        f.write("")  # Create or clear the file
 
     try:
         rag = await initialize_rag()
@@ -81,20 +83,13 @@ async def eval_alight(data: DatasetLoader):
                 "lightrag_reflection_answer": ans_reflect,
                 "alightrag_answer": ans_alight
             }
-            results.append(result_entry)
+            with open(result_file, 'a', encoding='utf-8') as f:
+                f.write(f"{result_entry}\n")
+                logger.info(f"Result for sample {i} saved to {result_file}")
 
     except Exception as e:
         logger.error(f"An error occurred: {e}")
     finally:
-        try:
-            # Save results to a file
-            result_file = os.path.join(WORKING_DIR, "eval_results.jsonl")
-            with open(result_file, 'w', encoding='utf-8') as f:
-                for entry in results:
-                    f.write(f"{entry}\n")
-            logger.info(f"Results saved to {result_file}")
-        except Exception as e:
-            logger.error(f"Failed to save results: {e}")
         if rag:
             await rag.finalize_storages()
 
@@ -103,7 +98,7 @@ if __name__ == "__main__":
     configure_logging(WORKING_DIR)
     # dataset_path = "datasets/hotpot_dev_distractor_v1.json"
     # dataset_path = "datasets/graphquestions.testing.json"
-    dataset_path = "datasets/agriculture.jsonl"
+    dataset_path = "datasets/mix.jsonl"
     num_samples = 10
     dataloader = create_dataset_loader(dataset_path, num_samples=num_samples)
     asyncio.run(eval_alight(dataloader))
