@@ -172,4 +172,5 @@ cython_debug/
 
 # experiment
 datasets/
-*_test/
+alightrag_test/
+experiments/

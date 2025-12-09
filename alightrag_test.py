@@ -14,7 +14,8 @@ from alightrag.utils import logger, EmbeddingFunc
 load_dotenv(dotenv_path=".env", override=True)
 
 time_str = time.strftime("%m%d%H%M", time.localtime())
-WORKING_DIR = "./alightrag_test/" + time_str
+WORKING_DIR = os.getenv("WORKING_DIR", "./alightrag_test/")
+WORKING_DIR = WORKING_DIR + time_str
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR, exist_ok=True)
 

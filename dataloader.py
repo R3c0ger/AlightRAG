@@ -10,23 +10,23 @@ class DatasetLoader(ABC):
         self.file_path = file_path
         self.num_samples = num_samples
         random.seed(seed)
-        self._samples = self._load_samples()
+        self._samples = self._choose_samples()
         self.contexts = self.get_contexts()
         self.queries = self.get_queries()
         self.answers = self.get_answers()
 
     def _load_raw_data(self) -> List[Dict]:
-        """Load raw data from file."""
+        """Default: load JSON list from a .json file."""
         with open(self.file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def _load_samples(self) -> List[Dict]:
+    def _choose_samples(self) -> List[Dict]:
         raw_data = self._load_raw_data()
         n = min(self.num_samples, len(raw_data))
         return random.sample(raw_data, n)
 
     @abstractmethod
-    def _sample_to_text(self, sample: Dict) -> str:
+    def _get_context(self, sample: Dict) -> str:
         """Convert a single sample to a plain text context string."""
         pass
 
@@ -36,7 +36,7 @@ class DatasetLoader(ABC):
         pass
 
     def get_contexts(self) -> List[str]:
-        return [self._sample_to_text(sample) for sample in self._samples]
+        return [self._get_context(sample) for sample in self._samples]
 
     def get_queries(self) -> List[str]:
         return [sample['question'] for sample in self._samples]
@@ -49,7 +49,7 @@ class DatasetLoader(ABC):
 
 
 class HotpotQALoader(DatasetLoader):
-    def _sample_to_text(self, sample: Dict) -> str:
+    def _get_context(self, sample: Dict) -> str:
         texts = []
         for title, sentences in sample['context']:
             para = f"## {title}\n" + "\n".join(sentences)
@@ -61,7 +61,7 @@ class HotpotQALoader(DatasetLoader):
 
 
 class GraphQuestionsLoader(DatasetLoader):
-    def _sample_to_text(self, sample: Dict) -> str:
+    def _get_context(self, sample: Dict) -> str:
         nodes = {node['nid']: node for node in sample['graph_query']['nodes']}
         edges = sample['graph_query']['edges']
         desc_lines = []
@@ -85,7 +85,38 @@ class GraphQuestionsLoader(DatasetLoader):
         return answers[0] if answers else ""
 
 
-# Factory function for convenience
+class UltraDomainLoader(DatasetLoader):
+    def _load_raw_data(self) -> List[Dict]:
+        """Load data from a .jsonl file (one JSON object per line)."""
+        samples = []
+        with open(self.file_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    samples.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Invalid JSON at line {line_num} in {self.file_path}: {e}")
+        return samples
+
+    def _get_context(self, sample: Dict) -> str:
+        # context is already a raw text string; normalize newlines and whitespace if needed
+        context = sample.get('context', '')
+        # Optional: collapse excessive blank lines
+        lines = [line for line in context.splitlines() if line.strip() or any(c != '\n' for c in line)]
+        return '\n'.join(lines)
+
+    def _get_answer(self, sample: Dict) -> str:
+        answers = sample.get('answers', [])
+        return answers[0] if answers else ""
+
+    def get_queries(self) -> List[str]:
+        # UltraDomain uses 'input' instead of 'question'
+        return [sample['input'] for sample in self._samples]
+
+
+# --- Factory Function ---
 def create_dataset_loader(
     file_path: str,
     dataset_type: Optional[str] = None,
@@ -98,6 +129,8 @@ def create_dataset_loader(
             dataset_type = 'hotpotqa'
         elif 'graph' in fname and 'question' in fname:
             dataset_type = 'graphquestions'
+        elif fname.endswith('.jsonl'):
+            dataset_type = 'ultradomain'
         else:
             raise ValueError("Cannot auto-detect dataset type. Please specify `dataset_type`.")
 
@@ -105,5 +138,7 @@ def create_dataset_loader(
         return HotpotQALoader(file_path, num_samples, seed)
     elif dataset_type == 'graphquestions':
         return GraphQuestionsLoader(file_path, num_samples, seed)
+    elif dataset_type == 'ultradomain':
+        return UltraDomainLoader(file_path, num_samples, seed)
     else:
         raise ValueError(f"Unsupported dataset_type: {dataset_type}")
