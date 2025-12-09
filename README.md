@@ -1,17 +1,26 @@
 # AlightRAG: Associations Light Your Path to the Answer
+
 ## 1. Code
-### 1.1. https://github.com/0x0addc001/AlightRAG
+
+https://github.com/0x0addc001/AlightRAG
+
+https://github.com/R3c0ger/AlightRAG (evaluation)
+
 ## 2. Usage
-### 2.1. modify .env: use your api key for llm and embedding
-### 2.2. modify your book.txt
-### 2.3. modify alightrag_test.py: use the right alightrag.llm package which is applicable for your llm and embedding, modify your query
-### 2.4. run python alightrag_test.py
+
+1. modify `.env`: use your api key for llm and embedding;
+2. modify your `book.txt`;
+3. modify `alightrag_test.py`: use the right `alightrag.llm` package which is applicable for your llm and embedding, modify your query;
+4. run python `alightrag_test.py`.
    - hybrid -> lightrag
    - alightrag -> alightrag
-   - reasoning -> lightrag+reasoning
-   - reflection -> lightrag+reflection
+   - reasoning -> lightrag + reasoning
+   - reflection -> lightrag + reflection
+
 ## 3. Demo
+
 ### 3.1. Context
+
 ```markdown
 Passage: The Tangled Web of Centennial City
 In the heart of the Arid Basin, Centennial City emerged not as a traditional metropolis but as a series of interconnected, climate-controlled biodomes. Its founding in 2075 was spearheaded by the Kaito Foundation, a consortium of Japanese and Norwegian engineering firms specializing in glacial geo-engineering. The Foundation's first CEO, Elara Vance, famously opposed the city's initial energy design, advocating for a solar-tidal hybrid system. However, the city council, influenced by the powerful mining guild "The Veridian Pact," opted for a volatile but powerful Thorium-Fission Reactor, nicknamed "Prometheus."
@@ -19,12 +28,16 @@ The reactor's core containment vessel was constructed using a patented, transluc
 The Veridian Pact, seeking to cut costs, secretly subcontracted the mineral extraction for the Ceruleum to an automated drone fleet operated by "Delta-7 Mining," a subsidiary of the larger Kaito Foundation. This created a severe conflict of interest, unbeknownst to the city council. Delta-7's drones used a highly efficient but ecologically damaging sonar-pulse technique to locate deposits, a method explicitly banned under the "Arid Basin Conservation Act of 2060."
 In 2088, a minor fault in the Prometheus reactor's secondary cooling system, traced to a brittle junction made of sub-standard Ceruleum, caused a city-wide "Brownout." The subsequent investigation, led by Chief Inspector Maya Petrova, uncovered the illicit mining operation. The scandal, dubbed "The Ceruleum Affair," led to the dissolution of The Veridian Pact and a complete overhaul of the city's energy grid to the solar-tidal system Elara Vance had originally proposed. The settlement fines were used to fund the ORT's largest project: the "Neo-Florida Keys Reef."
 ```
+
 ### 3.2. Multi-Hop Question
+
 ```markdown
 Multi-Hop Question:
 What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?
 ```
-### 3.3. Ground Truth Answer 
+
+### 3.3. Ground Truth Answer
+
 ```markdown
 Multi-Hop Question:
 What specific ecological project was ultimately funded as a direct, albeit indirect, consequence of the Kaito Foundation's subsidiary violating a 2060 conservation act during the procurement of materials for Centennial City's primary power source?
@@ -37,11 +50,15 @@ Hop 5: Trace where the settlement money was directed (to the Ocean Reclamation T
 Final Answer: The Neo-Florida Keys Reef project.
 This question tests the system's ability to connect entities across the text (Kaito Foundation -> Delta-7 -> Banned Act -> Scandal -> Fines -> ORT -> Specific Project) without any single sentence containing the direct link. It requires synthesis of information from the beginning, middle, and end of the passage.
 ```
+
 ### 3.4. LightRAG Answer
+
 ```markdown
 The specific ecological project that was ultimately funded as a consequence of the Kaito Foundation's subsidiary, Delta-7 Mining, violating the Arid Basin Conservation Act of 2060 is the "Neo-Florida Keys Reef." This project became the largest initiative supported by the Ocean Reclamation Trust (ORT). The project was funded by settlement fines derived from the scandal known as "The Ceruleum Affair," which involved Delta-7 Mining's illicit mining operations using ecologically damaging sonar-pulse techniques that were banned under the conservation act.
 ```
-### 3.5. AlightRAG Answer 
+
+### 3.5. AlightRAG Answer
+
 ```markdown
 # Answer
 The specific ecological project funded as a consequence was the "Neo-Florida Keys Reef."
@@ -81,7 +98,9 @@ nds were employed to support the Neo-Florida Keys Reef project. These paths conv
 
 _No supporting references were provided for inclusion._
 ```
-### 3.6. LightRAG+Reasoning Answer 
+
+### 3.6. LightRAG + Reasoning Answer
+
 ```markdown
 # Answer
 The Neo-Florida Keys Reef project.
@@ -110,7 +129,9 @@ logical project. Delta-7 Mining's improper mining methods, banned under the Arid
 # References
 No references are listed as specific document chunks were not tagged with reference ids.
 ```
-### 3.8. LightRAG+Reflection Answer 
+
+### 3.7. LightRAG + Reflection Answer
+
 ```markdown
 # Answer
 The Neo-Florida Keys Reef was the ecological project ultimately funded as a consequence of the Kaito Foundation's subsidiary, Delta-7 Mining, violating the Arid Basin Conservation Act of 2060.
