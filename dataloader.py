@@ -49,6 +49,7 @@ class DatasetLoader(ABC):
 
 
 class HotpotQALoader(DatasetLoader):
+    """Loader for HotpotQA, 2WikiMultiHopQA datasets."""
     def _get_context(self, sample: Dict) -> str:
         texts = []
         for title, sentences in sample['context']:
@@ -125,11 +126,11 @@ def create_dataset_loader(
 ) -> DatasetLoader:
     if dataset_type is None:
         fname = file_path.lower()
-        if 'hotpot' in fname:
+        if 'hotpot' in fname or '2wikimultihop' in fname:
             dataset_type = 'hotpotqa'
-        elif 'graph' in fname and 'question' in fname:
+        elif 'graphquestions' in fname:
             dataset_type = 'graphquestions'
-        elif fname.endswith('.jsonl'):
+        elif fname.endswith('.jsonl') or 'ultradomain' in fname:
             dataset_type = 'ultradomain'
         else:
             raise ValueError("Cannot auto-detect dataset type. Please specify `dataset_type`.")
