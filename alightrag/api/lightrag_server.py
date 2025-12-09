@@ -1116,7 +1116,10 @@ def get_application(args=None):
     return create_app(args)
 
 
-def configure_logging():
+def configure_logging(
+        working_dir: str = os.getcwd(),
+        log_filename: str = DEFAULT_LOG_FILENAME,
+):
     """Configure logging for uvicorn startup"""
 
     # Reset any existing handlers to ensure clean configuration
@@ -1126,8 +1129,9 @@ def configure_logging():
         logger.filters = []
 
     # Get log directory path from environment variable
-    log_dir = os.getenv("LOG_DIR", os.getcwd())
-    log_file_path = os.path.abspath(os.path.join(log_dir, DEFAULT_LOG_FILENAME))
+    # log_dir = os.getenv("LOG_DIR", os.getcwd())
+    log_dir = os.getenv("LOG_DIR", working_dir)
+    log_file_path = os.path.abspath(os.path.join(log_dir, log_filename))
 
     print(f"\nAlightRAG log file: {log_file_path}\n")
     os.makedirs(os.path.dirname(log_dir), exist_ok=True)
@@ -1195,6 +1199,9 @@ def configure_logging():
             },
         }
     )
+
+    logger.setLevel(get_env_value("LOG_LEVEL", "INFO"))
+    set_verbose_debug(get_env_value("VERBOSE", "False") == "True")
 
 
 def check_and_install_dependencies():

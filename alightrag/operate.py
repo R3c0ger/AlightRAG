@@ -5821,7 +5821,7 @@ async def naive_query(
         # Non-streaming response (string)
         if len(response) > len(sys_prompt):
             response = (
-                response[len(sys_prompt) :]
+                response[len(sys_prompt):]
                 .replace(sys_prompt, "")
                 .replace("user", "")
                 .replace("model", "")
